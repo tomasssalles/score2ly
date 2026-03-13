@@ -1,9 +1,13 @@
 import argparse
 import logging
+import shutil
 import sys
+from pathlib import Path
 from importlib.metadata import version
 
 logger = logging.getLogger(__name__)
+
+SUPPORTED_EXTENSIONS = {".pdf"}
 
 
 def main() -> None:
@@ -13,7 +17,10 @@ def main() -> None:
         prog="score2ly",
         description="Convert musical scores to LilyPond format.",
     )
-    parser.add_argument("input", nargs="?", help="Input file")
+    parser.add_argument("input", nargs="?", type=Path, help="Input file")
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
+    output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (default: input file's directory)")
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
 
     args = parser.parse_args()
@@ -22,4 +29,38 @@ def main() -> None:
         parser.print_help()
         sys.exit(0)
 
+    if not args.input.exists():
+        logger.error("Input file not found: %s", args.input)
+        sys.exit(1)
+
+    if args.input.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        logger.error(
+            "Unsupported input format '%s'. Supported: %s",
+            args.input.suffix,
+            sorted(SUPPORTED_EXTENSIONS),
+        )
+        sys.exit(1)
+
+    if args.output is not None:
+        if args.output.suffix != ".s2l":
+            logger.error("Output path must end in .s2l: %s", args.output)
+            sys.exit(1)
+        output = args.output
+    elif args.directory is not None:
+        if not args.directory.is_dir():
+            logger.error("Directory not found: %s", args.directory)
+            sys.exit(1)
+        output = args.directory / args.input.with_suffix(".s2l").name
+    else:
+        output = args.input.with_suffix(".s2l")
+
+    if output.exists():
+        answer = input(f"Output directory '{output}' already exists. Overwrite? [y/N] ")
+        if answer.strip().lower() != "y":
+            logger.info("Aborted.")
+            sys.exit(0)
+        shutil.rmtree(output)
+
+    output.mkdir(parents=True)
+    logger.info("Output directory: %s", output)
     logger.info("Processing: %s", args.input)
