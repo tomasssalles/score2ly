@@ -49,6 +49,10 @@ def append_history(output_dir: Path, event: str) -> None:
     _save(output_dir, data)
 
 
+def get_stage(output_dir: Path, stage: int) -> dict | None:
+    return _load(output_dir)["stages"].get(str(stage))
+
+
 def update_stage(output_dir: Path, stage: int, stage_data: dict) -> None:
     data = _load(output_dir)
     data["stages"][str(stage)] = stage_data
