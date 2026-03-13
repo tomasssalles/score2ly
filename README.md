@@ -25,7 +25,11 @@ uv sync
 ## Usage
 
 ```bash
+# during development
 uv run score2ly --help
+
+# after installation
+score2ly --help
 ```
 
 ## Status
