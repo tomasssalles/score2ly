@@ -68,4 +68,8 @@ def main() -> None:
     logger.info("Output directory: %s", output)
 
     metadata.create(output, sys.argv, Path.cwd(), args.input)
-    pipeline.run(args.input, output)
+    try:
+        pipeline.run(args.input, output)
+    except (ValueError,):
+        logger.exception("Oops, something went wrong.")
+        sys.exit(2)
