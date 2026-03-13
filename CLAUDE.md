@@ -41,6 +41,10 @@
 - **pyproject.toml** for project metadata and dependencies
 - **git** for version control, hosted on GitHub
 
+## Development Approach
+
+Work **outside-in**: design the interface first with dummy implementations that are immediately runnable, then gradually replace dummies with real implementations — one piece at a time — until nothing is stubbed out and the first version is complete.
+
 ## Development Conventions
 
 - One concern per module — keep files small and focused
