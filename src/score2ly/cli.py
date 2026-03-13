@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from importlib.metadata import version
 
+from score2ly import pipeline, metadata
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf"}
@@ -61,6 +63,9 @@ def main() -> None:
             sys.exit(0)
         shutil.rmtree(output)
 
-    output.mkdir(parents=True)
-    logger.info("Output directory: %s", output)
+    output.mkdir()
     logger.info("Processing: %s", args.input)
+    logger.info("Output directory: %s", output)
+
+    metadata.create(output, sys.argv, Path.cwd(), args.input)
+    pipeline.run(args.input, output)
