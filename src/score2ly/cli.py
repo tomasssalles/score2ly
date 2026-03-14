@@ -29,6 +29,7 @@ def main() -> None:
     output_group = convert.add_mutually_exclusive_group()
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (default: input file's directory)")
+    convert.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
 
     # update subcommand
     update = subparsers.add_parser("update", help="Resume the pipeline from a .s2l bundle after manual edits.")
@@ -72,7 +73,12 @@ def _convert(args: argparse.Namespace) -> None:
     else:
         output = args.input.with_suffix(".s2l")
 
-    if output.exists():
+    if args.overwrite:
+        if not output.exists():
+            logger.error("--overwrite specified but output does not exist: %s", output)
+            sys.exit(1)
+        shutil.rmtree(output)
+    elif output.exists():
         answer = input(f"Output directory '{output}' already exists. Overwrite? [y/N] ")
         if answer.strip().lower() != "y":
             logger.info("Aborted.")

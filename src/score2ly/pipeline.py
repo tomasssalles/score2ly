@@ -1,6 +1,10 @@
+import io
 import logging
 import shutil
 from pathlib import Path
+
+import img2pdf
+from pdf2image import convert_from_path
 
 from score2ly import metadata, pdf
 from score2ly.utils import relative
@@ -64,9 +68,17 @@ def _stage_2(output_dir: Path) -> None:
 
 
 def _preprocess_scan(source: Path, dest: Path) -> None:
-    # TODO: rasterize pages with pdf2image
+    logger.info("Stage 2: rasterizing pages at 300 DPI...")
+    images = convert_from_path(source, dpi=300)
+    logger.info("Stage 2: rasterized %d page(s).", len(images))
+
     # TODO: deskew each page image with deskew
     # TODO: crop blank margins with Pillow
-    # TODO: reassemble pages into PDF with img2pdf
-    # Dummy: pass through unchanged
-    shutil.copy2(source, dest)
+
+    logger.info("Stage 2: reassembling pages into PDF...")
+    image_bytes = []
+    for image in images:
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        image_bytes.append(buf.getvalue())
+    dest.write_bytes(img2pdf.convert(image_bytes))
