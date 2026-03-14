@@ -41,3 +41,4 @@ Early development.
 - Update command needs --overwrite argument or a new --output/--directory (and then copy all existing artifacts that won't change). Or maybe when not overwriting, pass a --tag argument (e.g. "--tag=v2") or similar and add that to the name to get the new output dir (`<old-stem>.<tag>.s2l`)?
 - Add versioning info to metadata? How do we handle versions? Filenames? Bundle directory name? Metadata top-level? Per stage? Maybe we don't handle versioning after all (for now) and the user can handle it via --output if they want?
 - Describe the contents of the output file bundle here.
+- If a pipeline stage actually generates a new artifact, it needs to force the subsequent stages to run. Cleanest would be for update_stage to delete the entries for higher stages. And every stage must then be aware that even if no metadata is available, there might be artifacts present already. Would deleting just the checksum be better?

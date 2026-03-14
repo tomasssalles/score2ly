@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Convert musical scores to LilyPond format"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pypdf>=5.0",
+]
 
 [project.scripts]
 score2ly = "score2ly.cli:main"
