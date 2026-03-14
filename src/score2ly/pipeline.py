@@ -52,6 +52,7 @@ def _stage_2(output_dir: Path) -> None:
         logger.info("Stage 2: vector PDF detected, skipping crop/deskew.")
         shutil.copy2(source, dest)
     else:
+        logger.info("Stage 2: scan detected, running crop/deskew.")
         _preprocess_scan(source, dest)
 
     metadata.update_stage(output_dir, 2, {

@@ -1,0 +1,44 @@
+[
+  {
+    "path": "clair_de_lune-mutopia.pdf",
+    "description": "Vector PDF typeset with LilyPond",
+    "info_url": "https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1778",
+    "download_url": "https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair-let.pdf",
+    "download_date": "2026-03-14"
+  },
+  {
+    "path": "consolations-first_edition.pdf",
+    "description": "Crooked, poor quality book-scan, with old-style decorative borders",
+    "info_url": "https://imslp.org/wiki/Special:ReverseLookup/14080",
+    "download_url": "https://ks15.imslp.org/files/imglnks/usimg/6/6f/IMSLP14080-Liszt_-_S172_Consolations_(breitkopf)_mono.pdf",
+    "download_date": "2026-03-14"
+  },
+  {
+    "path": "fuer_elise-first_edition.pdf",
+    "description": "Yellow tinted book-scan, with tons of German text in old script randomly between systems and a faint ghost of the backpage always visible",
+    "info_url": "https://imslp.org/wiki/Special:ReverseLookup/103834",
+    "download_url": "https://s9.imslp.org/files/imglnks/usimg/e/ed/IMSLP103834-PMLP14377-Beethoven-WoO.059nohl1867.pdf",
+    "download_date": "2026-03-13"
+  },
+  {
+    "path": "fuer_elise-leipzig.pdf",
+    "description": "High quality scan with clean, modern typesetting",
+    "info_url": "https://imslp.org/wiki/Special:ReverseLookup/993345",
+    "download_url": "https://vmirror.imslp.org/files/imglnks/usimg/a/a0/IMSLP993345-PMLP14377-Beethoven,_L._van_-_Clavierstuck_in_A_moll_'Fu-r_Elise',_WoO_59.pdf",
+    "download_date": "2026-03-13"
+  },
+  {
+    "path": "gymnopedie_1-mutopia.pdf",
+    "description": "Vector PDF typeset with LilyPond",
+    "info_url": "https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=37",
+    "download_url": "https://www.mutopiaproject.org/ftp/SatieE/gymnopedie_1/gymnopedie_1-a4.pdf",
+    "download_date": "2026-03-14"
+  },
+  {
+    "path": "kinderscenen-first_edition.pdf",
+    "description": "Good quality color scan of very old, yellow and spotted paper, with physical pages clearly visible, including their borders, plus an old-style drawn frame around the notes",
+    "info_url": "https://imslp.org/wiki/Special:ReverseLookup/971706",
+    "download_url": "https://vmirror.imslp.org/files/imglnks/usimg/1/14/IMSLP971706-PMLP2799-Schumann_Kinderscenen_leichte_Stu-cke_fu-r_das_Pianoforte.pdf",
+    "download_date": "2026-03-14"
+  }
+]
