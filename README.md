@@ -38,7 +38,6 @@ Early development.
 - Support for image files (PNG, JPG etc) as input.
 - Support for MusicXML as input.
 - Suport for LilyPond as input.
-- Make stages noop if outputs exist and match the checksum.
-- Add update command with .s2l dir as argument, re-running the pipeline. Needs --overwrite argument or a new --output/--directory (and then copy all existing artifacts that won't change).
+- Update command needs --overwrite argument or a new --output/--directory (and then copy all existing artifacts that won't change). Or maybe when not overwriting, pass a --tag argument (e.g. "--tag=v2") or similar and add that to the name to get the new output dir (`<old-stem>.<tag>.s2l`)?
 - Add versioning info to metadata? How do we handle versions? Filenames? Bundle directory name? Metadata top-level? Per stage? Maybe we don't handle versioning after all (for now) and the user can handle it via --output if they want?
 - Describe the contents of the output file bundle here.

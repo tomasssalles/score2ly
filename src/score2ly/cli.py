@@ -19,18 +19,34 @@ def main() -> None:
         prog="score2ly",
         description="Convert musical scores to LilyPond format.",
     )
-    parser.add_argument("input", nargs="?", type=Path, help="Input file")
-    output_group = parser.add_mutually_exclusive_group()
+    parser.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    # convert subcommand
+    convert = subparsers.add_parser("convert", help="Convert a score file into a new .s2l bundle.")
+    convert.add_argument("input", type=Path, help="Input score file")
+    output_group = convert.add_mutually_exclusive_group()
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (default: input file's directory)")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
+
+    # update subcommand
+    update = subparsers.add_parser("update", help="Resume the pipeline from a .s2l bundle after manual edits.")
+    update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     args = parser.parse_args()
 
-    if args.input is None:
+    if args.command is None:
         parser.print_help()
         sys.exit(0)
 
+    if args.command == "convert":
+        _convert(args)
+    elif args.command == "update":
+        _update(args)
+
+
+def _convert(args: argparse.Namespace) -> None:
     if not args.input.exists():
         logger.error("Input file not found: %s", args.input)
         sys.exit(1)
@@ -68,8 +84,28 @@ def main() -> None:
     logger.info("Output directory: %s", output)
 
     metadata.create(output, sys.argv, Path.cwd(), args.input)
+    _run_pipeline(args.input, output)
+
+
+def _update(args: argparse.Namespace) -> None:
+    bundle = args.bundle
+    if not bundle.is_dir():
+        logger.error("Bundle directory not found: %s", bundle)
+        sys.exit(1)
+    if bundle.suffix != ".s2l":
+        logger.error("Bundle path must end in .s2l: %s", bundle)
+        sys.exit(1)
+    if not (bundle / metadata.METADATA_FILENAME).exists():
+        logger.error("No metadata file found in bundle: %s", bundle)
+        sys.exit(1)
+
+    logger.info("Updating bundle: %s", bundle)
+    _run_pipeline(None, bundle)
+
+
+def _run_pipeline(input_path: Path | None, output_dir: Path) -> None:
     try:
-        pipeline.run(args.input, output)
-    except (ValueError,):
+        pipeline.run(input_path, output_dir)
+    except ValueError:
         logger.exception("Oops, something went wrong.")
         sys.exit(2)
