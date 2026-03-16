@@ -6,6 +6,7 @@ from pathlib import Path
 from importlib.metadata import version
 
 from score2ly import pipeline, metadata
+from score2ly.settings import ConvertSettings
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,21 @@ def main() -> None:
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (default: input file's directory)")
     convert.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
+
+    advanced = convert.add_argument_group("advanced")
+    advanced.add_argument("--pdf-kind", choices=["auto", "scan", "vector"], default="auto",
+                          help="Override PDF type detection (default: auto)")
+    advanced.add_argument("--skip-image-preprocessing", action="store_true",
+                          help="Skip crop/deskew; copy the PDF as-is into stage 2")
+    advanced.add_argument("--sheet-method", choices=["cc", "flood_fill", "largest_contour", "none"], default="flood_fill",
+                          help="Page isolation method (default: flood_fill)")
+    advanced.add_argument("--block-method", choices=["contour", "projection", "none"], default="projection",
+                          help="Music block detection method (default: projection)")
+    advanced.add_argument("--no-clahe", action="store_true", help="Skip CLAHE contrast enhancement")
+    advanced.add_argument("--projection-k", type=float, default=0.3, metavar="K",
+                          help="Ink threshold = mean - K*std for projection method (default: 0.3)")
+    advanced.add_argument("--no-projection-denoise", action="store_true",
+                          help="Skip morphological denoising in projection step")
 
     # update subcommand
     update = subparsers.add_parser("update", help="Resume the pipeline from a .s2l bundle after manual edits.")
@@ -85,12 +101,22 @@ def _convert(args: argparse.Namespace) -> None:
             sys.exit(0)
         shutil.rmtree(output)
 
+    settings = ConvertSettings(
+        pdf_kind=args.pdf_kind,
+        skip_image_preprocessing=args.skip_image_preprocessing,
+        sheet_method=args.sheet_method,
+        block_method=args.block_method,
+        clahe=not args.no_clahe,
+        projection_k=args.projection_k,
+        projection_denoise=not args.no_projection_denoise,
+    )
+
     output.mkdir()
     logger.info("Processing: %s", args.input)
     logger.info("Output directory: %s", output)
 
     metadata.create(output, sys.argv, Path.cwd(), args.input)
-    _run_pipeline(args.input, output)
+    _run_pipeline(args.input, output, settings)
 
 
 def _update(args: argparse.Namespace) -> None:
@@ -109,9 +135,9 @@ def _update(args: argparse.Namespace) -> None:
     _run_pipeline(None, bundle)
 
 
-def _run_pipeline(input_path: Path | None, output_dir: Path) -> None:
+def _run_pipeline(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
     try:
-        pipeline.run(input_path, output_dir)
+        pipeline.run(input_path, output_dir, settings)
     except ValueError:
         logger.exception("Oops, something went wrong.")
         sys.exit(2)

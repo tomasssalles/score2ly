@@ -8,6 +8,8 @@ dependencies = [
     "pypdf>=5.0",
     "pdf2image>=1.17",
     "img2pdf>=0.5",
+    "opencv-python>=4.10",
+    "numpy>=2.0",
 ]
 
 [project.scripts]
