@@ -77,8 +77,13 @@ def _stage_2(output_dir: Path, settings: ConvertSettings) -> None:
 
     if skip_processing:
         logger.info("Stage 2: %s, skipping crop/deskew.", pdf_kind_msg)
-        shutil.copy2(source, dest)
+        dest.symlink_to(source.relative_to(dest.parent, walk_up=True))
     else:
+        if settings.preprocessing_is_noop():
+            raise ValueError(
+                "Image preprocessing is enabled but all steps are disabled. "
+                "Enable at least one step (e.g. --deskew, --clahe, --sheet-method, --block-method)."
+            )
         logger.info("Stage 2: %s, running crop/deskew.", pdf_kind_msg)
         _preprocess_scan(source, dest, settings, output_dir / "img_processing_debug")
 

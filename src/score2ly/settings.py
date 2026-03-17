@@ -24,3 +24,12 @@ class ConvertSettings:
     clahe: bool = False
     projection_k: float = DEFAULT_PROJECTION_K
     projection_denoise: bool = False
+
+    def preprocessing_is_noop(self) -> bool:
+        return (
+            self.sheet_method is SheetMethod.NONE
+            and self.block_method is BlockMethod.NONE
+            and not self.deskew
+            and not self.tight_crop
+            and not self.clahe
+        )

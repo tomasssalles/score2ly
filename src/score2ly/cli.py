@@ -6,8 +6,13 @@ from pathlib import Path
 from importlib.metadata import version
 
 from score2ly import pipeline, metadata
-from score2ly.image_processing import BlockMethod, SheetMethod, DEFAULT_PROJECTION_K, DEFAULT_SHEET_METHOD, \
-    DEFAULT_BLOCK_METHOD
+from score2ly.image_processing import (
+    BlockMethod,
+    SheetMethod,
+    DEFAULT_PROJECTION_K,
+    DEFAULT_SHEET_METHOD,
+    DEFAULT_BLOCK_METHOD,
+)
 from score2ly.settings import ConvertSettings
 
 logger = logging.getLogger(__name__)
