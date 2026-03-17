@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from pdf2image import convert_from_path
 
-from score2ly import image_processing, metadata, pdf
+from score2ly import audiveris, image_processing, metadata, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.utils import relative
 
@@ -129,13 +129,19 @@ def _stage_3(output_dir: Path) -> None:
             logger.info("Stage 3: already complete, skipping.")
             return
 
-    dest = output_dir / "03.omr_extracted.xml"
-    placeholder = Path(__file__).parent / "placeholder_musicxml.xml"
-    shutil.copy2(placeholder, dest)
+    stage2 = metadata.get_stage(output_dir, 2)
+    pages_dir = output_dir / stage2["output"]
+    input_images = sorted(pages_dir.glob("page_*.png"))
+
+    work_dir = output_dir / "03.omr_work"
+    xml_output = audiveris.run(input_images, work_dir)
+
+    dest = output_dir / f"03.omr_extracted{xml_output.suffix}"
+    shutil.copy2(xml_output, dest)
 
     metadata.update_stage(output_dir, 3, {
-        "description": "OMR extraction from preprocessed pages to MusicXML (placeholder)",
+        "description": "OMR extraction from preprocessed pages to MusicXML via Audiveris",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 3: Done (placeholder).")
+    logger.info("Stage 3: Done.")
