@@ -6,6 +6,8 @@ from pathlib import Path
 from importlib.metadata import version
 
 from score2ly import pipeline, metadata
+from score2ly.image_processing import BlockMethod, SheetMethod, DEFAULT_PROJECTION_K, DEFAULT_SHEET_METHOD, \
+    DEFAULT_BLOCK_METHOD
 from score2ly.settings import ConvertSettings
 
 logger = logging.getLogger(__name__)
@@ -35,17 +37,19 @@ def main() -> None:
     advanced = convert.add_argument_group("advanced")
     advanced.add_argument("--pdf-kind", choices=["auto", "scan", "vector"], default="auto",
                           help="Override PDF type detection (default: auto)")
-    advanced.add_argument("--skip-image-preprocessing", action="store_true",
-                          help="Skip crop/deskew; copy the PDF as-is into stage 2")
-    advanced.add_argument("--sheet-method", choices=["cc", "flood_fill", "largest_contour", "none"], default="flood_fill",
-                          help="Page isolation method (default: flood_fill)")
-    advanced.add_argument("--block-method", choices=["contour", "projection", "none"], default="projection",
-                          help="Music block detection method (default: projection)")
-    advanced.add_argument("--no-clahe", action="store_true", help="Skip CLAHE contrast enhancement")
-    advanced.add_argument("--projection-k", type=float, default=0.3, metavar="K",
-                          help="Ink threshold = mean - K*std for projection method (default: 0.3)")
-    advanced.add_argument("--no-projection-denoise", action="store_true",
-                          help="Skip morphological denoising in projection step")
+    advanced.add_argument("--preprocess-images", action="store_true",
+                          help="Enable image preprocessing (crop/deskew) for scans")
+    advanced.add_argument("--sheet-method", choices=[m.value for m in SheetMethod], default=DEFAULT_SHEET_METHOD.value,
+                          help=f"Page isolation method (default: {DEFAULT_SHEET_METHOD.value})")
+    advanced.add_argument("--block-method", choices=[m.value for m in BlockMethod], default=DEFAULT_BLOCK_METHOD.value,
+                          help=f"Music block detection method (default: {DEFAULT_BLOCK_METHOD.value})")
+    advanced.add_argument("--deskew", action="store_true", help="Enable deskew step")
+    advanced.add_argument("--tight-crop", action="store_true", help="Enable tight crop step")
+    advanced.add_argument("--clahe", action="store_true", help="Enable CLAHE contrast enhancement")
+    advanced.add_argument("--projection-k", type=float, default=DEFAULT_PROJECTION_K, metavar="K",
+                          help=f"Ink threshold = mean - K*std for projection method (default: {DEFAULT_PROJECTION_K})")
+    advanced.add_argument("--projection-denoise", action="store_true",
+                          help="Enable morphological denoising in projection step")
 
     # update subcommand
     update = subparsers.add_parser("update", help="Resume the pipeline from a .s2l bundle after manual edits.")
@@ -103,12 +107,14 @@ def _convert(args: argparse.Namespace) -> None:
 
     settings = ConvertSettings(
         pdf_kind=args.pdf_kind,
-        skip_image_preprocessing=args.skip_image_preprocessing,
-        sheet_method=args.sheet_method,
-        block_method=args.block_method,
-        clahe=not args.no_clahe,
+        preprocess_images=args.preprocess_images,
+        sheet_method=SheetMethod(args.sheet_method),
+        block_method=BlockMethod(args.block_method),
+        deskew=args.deskew,
+        tight_crop=args.tight_crop,
+        clahe=args.clahe,
         projection_k=args.projection_k,
-        projection_denoise=not args.no_projection_denoise,
+        projection_denoise=args.projection_denoise,
     )
 
     output.mkdir()

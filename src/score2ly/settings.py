@@ -1,16 +1,26 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from score2ly.image_processing import (
+    BlockMethod,
+    SheetMethod,
+    DEFAULT_SHEET_METHOD,
+    DEFAULT_BLOCK_METHOD,
+    DEFAULT_PROJECTION_K,
+)
+
 
 @dataclass
 class ConvertSettings:
     # PDF type
     pdf_kind: Literal["auto", "vector", "scan"] = "auto"
-    skip_image_preprocessing: bool = False
+    preprocess_images: bool = False
 
     # Image preprocessing (for scans)
-    sheet_method: Literal["cc", "flood_fill", "largest_contour", "none"] = "flood_fill"
-    block_method: Literal["contour", "projection", "none"] = "projection"
-    clahe: bool = True
-    projection_k: float = 0.3
+    sheet_method: SheetMethod = DEFAULT_SHEET_METHOD
+    block_method: BlockMethod = DEFAULT_BLOCK_METHOD
+    deskew: bool = False
+    tight_crop: bool = False
+    clahe: bool = False
+    projection_k: float = DEFAULT_PROJECTION_K
     projection_denoise: bool = False

@@ -1,4 +1,3 @@
-import io
 import logging
 import shutil
 from pathlib import Path
@@ -60,8 +59,8 @@ def _stage_2(output_dir: Path, settings: ConvertSettings) -> None:
     pdf_kind_msg: str
     skip_processing: bool
 
-    if settings.skip_image_preprocessing:
-        pdf_kind_msg = "--skip-image-preprocessing set"
+    if not settings.preprocess_images:
+        pdf_kind_msg = "image preprocessing disabled"
         skip_processing = True
     elif settings.pdf_kind == "vector":
         pdf_kind_msg = "vector PDF"
@@ -108,6 +107,8 @@ def _preprocess_scan(source: Path, dest: Path, settings: ConvertSettings, debug_
             gray,
             sheet_method=settings.sheet_method,
             block_method=settings.block_method,
+            deskew=settings.deskew,
+            tight_crop=settings.tight_crop,
             clahe=settings.clahe,
             projection_k=settings.projection_k,
             projection_denoise=settings.projection_denoise,

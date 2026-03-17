@@ -1,11 +1,30 @@
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+class SheetMethod(str, Enum):
+    NONE = "none"
+    CC = "cc"
+    FLOOD_FILL = "flood_fill"
+    LARGEST_CONTOUR = "largest_contour"
+
+
+class BlockMethod(str, Enum):
+    NONE = "none"
+    CONTOUR = "contour"
+    PROJECTION = "projection"
+
+
+DEFAULT_SHEET_METHOD = SheetMethod.NONE
+DEFAULT_BLOCK_METHOD = BlockMethod.NONE
+DEFAULT_PROJECTION_K = 1.5
 
 
 @dataclass
@@ -441,44 +460,44 @@ def _enhance_contrast(gray: np.ndarray) -> np.ndarray:
 def process_page(
     gray: np.ndarray,
     *,
-    sheet_method: str = "flood_fill",
-    block_method: str = "projection",
-    clahe: bool = True,
-    projection_k: float = 0.3,
-    projection_denoise: bool = False,
-    debug_dir: Path | None = None,
+    sheet_method: SheetMethod,
+    block_method: BlockMethod,
+    deskew: bool,
+    tight_crop: bool,
+    clahe: bool,
+    projection_k: float,
+    projection_denoise: bool,
+    debug_dir: Path | None,
 ) -> np.ndarray:
     ctx = _DebugCtx(debug_dir)
     ctx.save("input_grayscale", gray)
 
     step = gray
 
-    if sheet_method != "none":
-        logger.info("  step 1: crop to main sheet [%s]", sheet_method)
-        if sheet_method == "cc":
+    if sheet_method is not SheetMethod.NONE:
+        logger.info("  step 1: crop to main sheet [%s]", sheet_method.value)
+        if sheet_method is SheetMethod.CC:
             step = _crop_to_main_sheet_cc(step, ctx)
-        elif sheet_method == "flood_fill":
+        elif sheet_method is SheetMethod.FLOOD_FILL:
             step = _crop_to_main_sheet_flood_fill(step, ctx)
-        elif sheet_method == "largest_contour":
+        elif sheet_method is SheetMethod.LARGEST_CONTOUR:
             step = _crop_to_main_sheet_largest_contour(step, ctx)
-        else:
-            raise ValueError(f"Unknown sheet_method: {sheet_method!r}")
 
-    if block_method != "none":
-        logger.info("  step 2: crop to music block [%s]", block_method)
-        if block_method == "contour":
+    if block_method is not BlockMethod.NONE:
+        logger.info("  step 2: crop to music block [%s]", block_method.value)
+        if block_method is BlockMethod.CONTOUR:
             step = _crop_to_music_block_contour(step, ctx)
-        elif block_method == "projection":
+        elif block_method is BlockMethod.PROJECTION:
             step = _crop_to_music_block_projection(step, ctx, k=projection_k, denoise=projection_denoise)
-        else:
-            raise ValueError(f"Unknown block_method: {block_method!r}")
 
-    logger.info("  step 3: deskew")
-    step, angle, method = _deskew_staff_based(step, ctx)
-    logger.info("  deskew: %.3f° (%s)", angle, method)
+    if deskew:
+        logger.info("  step 3: deskew")
+        step, angle, method = _deskew_staff_based(step, ctx)
+        logger.info("  deskew: %.3f° (%s)", angle, method)
 
-    logger.info("  step 4: tight crop")
-    step = _tight_crop(step, ctx)
+    if tight_crop:
+        logger.info("  step 4: tight crop")
+        step = _tight_crop(step, ctx)
 
     if clahe:
         logger.info("  step 5: enhance contrast (CLAHE)")
