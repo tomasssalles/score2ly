@@ -2,7 +2,9 @@ import logging
 import os
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +52,28 @@ def run(input_images: list[Path], work_dir: Path) -> Path:
             f"Audiveris failed (exit code {result.returncode}):\n{result.stderr}"
         )
 
-    xml_files = sorted(work_dir.glob("*.mxl")) + sorted(work_dir.glob("*.xml"))
-    if not xml_files:
-        raise RuntimeError("Audiveris ran but produced no MusicXML output in " + str(work_dir))
+    mxl_files = sorted(work_dir.glob("*.mxl"))
+    xml_files = sorted(work_dir.glob("*.xml"))
 
-    return xml_files[0]
+    if mxl_files:
+        return _extract_mxl(mxl_files[0])
+    if xml_files:
+        return xml_files[0]
+    raise RuntimeError("Audiveris ran but produced no MusicXML output in " + str(work_dir))
+
+
+def _extract_mxl(mxl_path: Path) -> Path:
+    with zipfile.ZipFile(mxl_path) as z:
+        container = ElementTree.fromstring(z.read("META-INF/container.xml"))
+        root_file = container.find(".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile")
+        if root_file is None:
+            root_file = container.find(".//rootfile")
+        if root_file is None:
+            raise RuntimeError(f"Could not find rootfile in {mxl_path}/META-INF/container.xml")
+
+        xml_name = root_file.attrib["full-path"]
+        dest = mxl_path.with_suffix(".xml")
+        dest.write_bytes(z.read(xml_name))
+
+    logger.debug("Stage 3: extracted %s from %s", xml_name, mxl_path.name)
+    return dest

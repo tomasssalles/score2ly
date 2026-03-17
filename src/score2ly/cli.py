@@ -21,13 +21,12 @@ SUPPORTED_EXTENSIONS = {".pdf"}
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
     parser = argparse.ArgumentParser(
         prog="score2ly",
         description="Convert musical scores to LilyPond format.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -61,6 +60,7 @@ def main() -> None:
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s: %(message)s")
 
     if args.command is None:
         parser.print_help()
