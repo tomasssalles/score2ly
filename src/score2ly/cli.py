@@ -21,17 +21,20 @@ SUPPORTED_EXTENSIONS = {".pdf"}
 
 
 def main() -> None:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+
     parser = argparse.ArgumentParser(
         prog="score2ly",
         description="Convert musical scores to LilyPond format.",
+        parents=[common],
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
 
     subparsers = parser.add_subparsers(dest="command")
 
     # convert subcommand
-    convert = subparsers.add_parser("convert", help="Convert a score file into a new .s2l bundle.")
+    convert = subparsers.add_parser("convert", parents=[common], help="Convert a score file into a new .s2l bundle.")
     convert.add_argument("input", type=Path, help="Input score file")
     output_group = convert.add_mutually_exclusive_group()
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
@@ -56,7 +59,7 @@ def main() -> None:
                           help="Enable morphological denoising in projection step")
 
     # update subcommand
-    update = subparsers.add_parser("update", help="Resume the pipeline from a .s2l bundle after manual edits.")
+    update = subparsers.add_parser("update", parents=[common], help="Resume the pipeline from a .s2l bundle after manual edits.")
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     args = parser.parse_args()

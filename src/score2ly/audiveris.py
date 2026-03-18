@@ -38,19 +38,19 @@ def find_executable() -> Path:
     )
 
 
-def run(input_images: list[Path], work_dir: Path) -> Path:
+def run(input_pdf: Path, work_dir: Path) -> Path:
     exe = find_executable()
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = [str(exe), "-batch", "-export", "-output", str(work_dir), *[str(p) for p in input_images]]
-    logger.info("Stage 3: running Audiveris on %d page(s)...", len(input_images))
+    cmd = [str(exe), "-batch", "-export", "-output", str(work_dir), str(input_pdf)]
+    logger.info("Stage 3: running Audiveris on %s...", input_pdf.name)
     logger.debug("Stage 3: command: %s", " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Audiveris failed (exit code {result.returncode}):\n{result.stderr}"
-        )
+        log_files = sorted(work_dir.glob("*.log"))
+        log_hint = f"See log: {log_files[-1]}" if log_files else f"No log file found in {work_dir}"
+        raise RuntimeError(f"Audiveris failed (exit code {result.returncode}). {log_hint}")
 
     mxl_files = sorted(work_dir.glob("*.mxl"))
     xml_files = sorted(work_dir.glob("*.xml"))
