@@ -33,7 +33,6 @@ def extract(omr_path: Path) -> dict:
             padding = round(interline * _INTERLINE_PADDING_FACTOR)
 
             systems_out = []
-            measure_offset_in_sheet = global_measure_offset
 
             for sys_el in sheet_xml.find("page").findall("system"):
                 sys_id = int(sys_el.attrib["id"])
@@ -47,8 +46,8 @@ def extract(omr_path: Path) -> dict:
                 sys_bounds = _system_bounds(staff_extent, glyph_bounds, padding, page_height)
 
                 local_ids = sorted(stacks.keys())
-                first_global = measure_offset_in_sheet + 1
-                last_global = measure_offset_in_sheet + len(local_ids)
+                first_global = global_measure_offset + local_ids[0]
+                last_global = global_measure_offset + local_ids[-1]
 
                 measures_out = []
                 for local_id in local_ids:
@@ -58,11 +57,9 @@ def extract(omr_path: Path) -> dict:
                     meas_bounds = _measure_bounds(stack_left, stack_right, sys_bounds)
                     measures_out.append({
                         "local_id": local_id,
-                        "global_id": measure_offset_in_sheet + local_id,
+                        "global_id": global_measure_offset + local_id,
                         "bounds": meas_bounds,
                     })
-
-                measure_offset_in_sheet += len(local_ids)
 
                 systems_out.append({
                     "id": sys_id,

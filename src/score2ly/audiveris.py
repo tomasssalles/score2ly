@@ -62,7 +62,12 @@ def export_xml(omr_path: Path, work_dir: Path) -> Path:
     exe = find_executable()
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = [str(exe), "-batch", "-export", "-output", str(work_dir), str(omr_path)]
+    # Audiveris ignores -output for existing .omr books and writes the export next
+    # to the input file. Symlink the .omr into work_dir so output lands there.
+    omr_link = work_dir / omr_path.name
+    omr_link.symlink_to(omr_path.relative_to(omr_link.parent, walk_up=True))
+
+    cmd = [str(exe), "-batch", "-export", str(omr_link)]
     logger.info("Stage 4: exporting MusicXML from %s...", omr_path.name)
     logger.debug("Stage 4: command: %s", " ".join(cmd))
 
