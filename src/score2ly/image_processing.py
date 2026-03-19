@@ -2,9 +2,13 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
+
+if TYPE_CHECKING:
+    from PIL.Image import Image
 
 logger = logging.getLogger(__name__)
 
@@ -505,3 +509,15 @@ def process_page(
 
     ctx.save("final", step)
     return step
+
+
+CROP_PADDING = 0.02
+
+
+def crop_and_save(img: "Image", bounds: dict, dest: Path) -> None:
+    pad = round(img.width * CROP_PADDING)
+    x = max(0, bounds["x"] - pad)
+    y = max(0, bounds["y"] - pad)
+    right = min(img.width, bounds["x"] + bounds["width"] + pad)
+    bottom = min(img.height, bounds["y"] + bounds["height"] + pad)
+    img.crop((x, y, right, bottom)).save(dest)

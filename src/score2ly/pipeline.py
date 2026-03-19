@@ -237,12 +237,12 @@ def _stage_6(output_dir: Path) -> None:
         for system in sheet["systems"]:
             global_system_id += 1
             sys_path = systems_dir / f"system_{global_system_id:04d}.png"
-            _crop_and_save(page_img, system["bounds"], sys_path)
+            image_processing.crop_and_save(page_img, system["bounds"], sys_path)
             checksums[str(relative(sys_path, output_dir))] = metadata.checksum(sys_path)
 
             for measure in system["measures"]:
                 meas_path = measures_dir / f"measure_{measure['global_id']:04d}.png"
-                _crop_and_save(page_img, measure["bounds"], meas_path)
+                image_processing.crop_and_save(page_img, measure["bounds"], meas_path)
                 checksums[str(relative(meas_path, output_dir))] = metadata.checksum(meas_path)
 
     metadata.update_stage(output_dir, 6, {
@@ -253,17 +253,5 @@ def _stage_6(output_dir: Path) -> None:
     logger.info("Stage 6: Done.")
 
 
-_CROP_PADDING = 0.02
-
-
 def _stage_7(output_dir: Path) -> None:
     logger.info("Stage 7: not yet implemented, skipping.")
-
-
-def _crop_and_save(img, bounds: dict, dest: Path) -> None:
-    pad = round(img.width * _CROP_PADDING)
-    x = max(0, bounds["x"] - pad)
-    y = max(0, bounds["y"] - pad)
-    right = min(img.width, bounds["x"] + bounds["width"] + pad)
-    bottom = min(img.height, bounds["y"] + bounds["height"] + pad)
-    img.crop((x, y, right, bottom)).save(dest)
