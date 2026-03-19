@@ -1,3 +1,4 @@
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -7,7 +8,7 @@ import img2pdf
 import numpy as np
 from pdf2image import convert_from_path
 
-from score2ly import audiveris, image_processing, metadata, pdf
+from score2ly import audiveris, image_processing, metadata, omr_layout, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.utils import relative
 
@@ -20,6 +21,8 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
     _stage_1(input_path, output_dir)
     _stage_2(output_dir, settings)
     _stage_3(output_dir)
+    _stage_4(output_dir)
+    _stage_5(output_dir)
 
 
 def _stage_1(input_path: Path | None, output_dir: Path) -> None:
@@ -136,14 +139,62 @@ def _stage_3(output_dir: Path) -> None:
     source = output_dir / stage2["output"]
 
     work_dir = output_dir / "03.omr_work"
-    xml_output = audiveris.run(source, work_dir)
+    omr_output = audiveris.run_omr(source, work_dir)
 
-    dest = output_dir / f"03.omr_extracted{xml_output.suffix}"
-    shutil.copy2(xml_output, dest)
+    dest = output_dir / "03.audiveris-project.omr"
+    dest.symlink_to(omr_output.relative_to(dest.parent, walk_up=True))
 
     metadata.update_stage(output_dir, 3, {
-        "description": "OMR extraction from preprocessed PDF to MusicXML via Audiveris",
+        "description": "OMR transcription via Audiveris",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
     logger.info("Stage 3: Done.")
+
+
+def _stage_4(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, 4)
+    if existing is not None:
+        dest_existing = output_dir / existing["output"]
+        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
+            logger.info("Stage 4: already complete, skipping.")
+            return
+
+    stage3 = metadata.get_stage(output_dir, 3)
+    source = output_dir / stage3["output"]
+
+    work_dir = output_dir / "04.export_work"
+    xml_output = audiveris.export_xml(source, work_dir)
+
+    dest = output_dir / "04.musicxml.xml"
+    dest.symlink_to(xml_output.relative_to(dest.parent, walk_up=True))
+
+    metadata.update_stage(output_dir, 4, {
+        "description": "Export MusicXML from Audiveris .omr project",
+        "output": str(relative(dest, output_dir)),
+        "checksum": metadata.checksum(dest),
+    })
+    logger.info("Stage 4: Done.")
+
+
+def _stage_5(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, 5)
+    if existing is not None:
+        dest_existing = output_dir / existing["output"]
+        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
+            logger.info("Stage 5: already complete, skipping.")
+            return
+
+    stage3 = metadata.get_stage(output_dir, 3)
+    source = output_dir / stage3["output"]
+
+    dest = output_dir / "05.omr_layout.json"
+    layout = omr_layout.extract(source)
+    dest.write_text(json.dumps(layout, indent=2))
+
+    metadata.update_stage(output_dir, 5, {
+        "description": "Extract system and measure layout from Audiveris .omr project",
+        "output": str(relative(dest, output_dir)),
+        "checksum": metadata.checksum(dest),
+    })
+    logger.info("Stage 5: Done.")
