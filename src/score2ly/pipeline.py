@@ -24,6 +24,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
     _stage_4(output_dir)
     _stage_5(output_dir)
     _stage_6(output_dir)
+    _stage_7(output_dir)
 
 
 def _stage_1(input_path: Path | None, output_dir: Path) -> None:
@@ -253,6 +254,10 @@ def _stage_6(output_dir: Path) -> None:
 
 
 _CROP_PADDING = 0.02
+
+
+def _stage_7(output_dir: Path) -> None:
+    logger.info("Stage 7: not yet implemented, skipping.")
 
 
 def _crop_and_save(img, bounds: dict, dest: Path) -> None:
