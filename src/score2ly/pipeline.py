@@ -8,7 +8,7 @@ import img2pdf
 import numpy as np
 from pdf2image import convert_from_path
 
-from score2ly import audiveris, image_processing, metadata, omr_layout, pdf
+from score2ly import audiveris, image_processing, metadata, musicxml2ly, omr_layout, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.utils import relative
 
@@ -260,4 +260,22 @@ def _stage_6(output_dir: Path) -> None:
 
 
 def _stage_7(output_dir: Path) -> None:
-    logger.info("Stage 7: not yet implemented, skipping.")
+    existing = metadata.get_stage(output_dir, 7)
+    if existing is not None:
+        dest_existing = output_dir / existing["output"]
+        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
+            logger.info("Stage 7: already complete, skipping.")
+            return
+
+    stage4 = metadata.get_stage(output_dir, 4)
+    source = output_dir / stage4["output"]
+
+    dest = output_dir / "07.lilypond.ly"
+    musicxml2ly.run(source, dest)
+
+    metadata.update_stage(output_dir, 7, {
+        "description": "Convert MusicXML to LilyPond via musicxml2ly",
+        "output": str(relative(dest, output_dir)),
+        "checksum": metadata.checksum(dest),
+    })
+    logger.info("Stage 7: Done.")
