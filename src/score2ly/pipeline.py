@@ -220,8 +220,10 @@ def _stage_6(output_dir: Path) -> None:
     layout = json.loads((output_dir / stage5["output"]).read_text())
 
     images_dir = output_dir / "06.images"
+    pages_dir = images_dir / "pages"
     systems_dir = images_dir / "systems"
     measures_dir = images_dir / "measures"
+    pages_dir.mkdir(parents=True, exist_ok=True)
     systems_dir.mkdir(parents=True, exist_ok=True)
     measures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -233,6 +235,10 @@ def _stage_6(output_dir: Path) -> None:
         page_w, page_h = sheet["width"], sheet["height"]
         logger.info("Stage 6: rasterizing page %d...", sheet_num)
         page_img = convert_from_path(pdf_path, size=(page_w, page_h), first_page=sheet_num, last_page=sheet_num)[0]
+
+        page_path = pages_dir / f"page_{sheet_num:04d}.png"
+        page_img.save(page_path)
+        checksums[str(relative(page_path, output_dir))] = metadata.checksum(page_path)
 
         for system in sheet["systems"]:
             global_system_id += 1
@@ -246,7 +252,7 @@ def _stage_6(output_dir: Path) -> None:
                 checksums[str(relative(meas_path, output_dir))] = metadata.checksum(meas_path)
 
     metadata.update_stage(output_dir, 6, {
-        "description": "Crop system and measure images from preprocessed PDF",
+        "description": "Rasterize pages and crop system and measure images from preprocessed PDF",
         "output": str(relative(images_dir, output_dir)),
         "checksums": checksums,
     })
