@@ -9,3 +9,4 @@ class Stage(IntEnum):
     LAYOUT     = auto()
     IMAGES     = auto()
     LILYPOND   = auto()
+    RENDER     = auto()

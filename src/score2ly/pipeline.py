@@ -8,7 +8,7 @@ import img2pdf
 import numpy as np
 from pdf2image import convert_from_path
 
-from score2ly import audiveris, image_processing, metadata, musicxml2ly, omr_layout, pdf
+from score2ly import audiveris, image_processing, lilypond, metadata, musicxml2ly, omr_layout, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
@@ -26,6 +26,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
     _stage_extract_layout(output_dir)
     _stage_crop(output_dir)
     _stage_musicxml2ly(output_dir)
+    _stage_render(output_dir)
 
 
 def _stage_copy_original(input_path: Path | None, output_dir: Path) -> None:
@@ -280,3 +281,25 @@ def _stage_musicxml2ly(output_dir: Path) -> None:
         "checksum": metadata.checksum(dest),
     })
     logger.info("Stage %d: Done.", Stage.LILYPOND)
+
+
+def _stage_render(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.RENDER)
+    if existing is not None:
+        dest_existing = output_dir / existing["output"]
+        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
+            logger.info("Stage %d: already complete, skipping.", Stage.RENDER)
+            return
+
+    stage_lilypond = metadata.get_stage(output_dir, Stage.LILYPOND)
+    source = output_dir / stage_lilypond["output"]
+
+    dest = output_dir / f"{int(Stage.RENDER):02d}.rendered.pdf"
+    lilypond.render(source, dest)
+
+    metadata.update_stage(output_dir, Stage.RENDER, {
+        "description": "Render LilyPond score to PDF",
+        "output": str(relative(dest, output_dir)),
+        "checksum": metadata.checksum(dest),
+    })
+    logger.info("Stage %d: Done.", Stage.RENDER)
