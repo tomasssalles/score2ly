@@ -6,6 +6,8 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from score2ly.stages import Stage
+
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "AUDIVERIS_PATH"
@@ -43,8 +45,8 @@ def run_omr(input_pdf: Path, work_dir: Path) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [str(exe), "-batch", "-transcribe", "-save", "-output", str(work_dir), str(input_pdf)]
-    logger.info("Stage 3: running Audiveris OMR on %s...", input_pdf.name)
-    logger.debug("Stage 3: command: %s", " ".join(cmd))
+    logger.info("Stage %d: running Audiveris OMR on %s...", Stage.OMR, input_pdf.name)
+    logger.debug("Stage %d: command: %s", Stage.OMR, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -68,8 +70,8 @@ def export_xml(omr_path: Path, work_dir: Path) -> Path:
     omr_link.symlink_to(omr_path.relative_to(omr_link.parent, walk_up=True))
 
     cmd = [str(exe), "-batch", "-export", str(omr_link)]
-    logger.info("Stage 4: exporting MusicXML from %s...", omr_path.name)
-    logger.debug("Stage 4: command: %s", " ".join(cmd))
+    logger.info("Stage %d: exporting MusicXML from %s...", Stage.MUSICXML, omr_path.name)
+    logger.debug("Stage %d: command: %s", Stage.MUSICXML, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -100,5 +102,5 @@ def _extract_mxl(mxl_path: Path) -> Path:
         dest = mxl_path.with_suffix(".xml")
         dest.write_bytes(z.read(xml_name))
 
-    logger.debug("Stage 4: extracted %s from %s", xml_name, mxl_path.name)
+    logger.debug("Stage %d: extracted %s from %s", Stage.MUSICXML, xml_name, mxl_path.name)
     return dest

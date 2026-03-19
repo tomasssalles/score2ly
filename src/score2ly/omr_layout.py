@@ -3,6 +3,8 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from score2ly.stages import Stage
+
 logger = logging.getLogger(__name__)
 
 _TESTED_MAJOR_VERSION = 5
@@ -85,13 +87,13 @@ def _check_version(book: ElementTree.Element) -> None:
     try:
         major = int(version.split(".")[0])
     except (ValueError, IndexError):
-        logger.warning("Stage 5: could not parse Audiveris version %r; proceeding anyway.", version)
+        logger.warning("Stage %d: could not parse Audiveris version %r; proceeding anyway.", Stage.LAYOUT, version)
         return
     if major != _TESTED_MAJOR_VERSION:
         logger.warning(
-            "Stage 5: this code was tested with Audiveris 5.*; detected version %s. "
+            "Stage %d: this code was tested with Audiveris 5.*; detected version %s. "
             "Results may be incorrect.",
-            version,
+            Stage.LAYOUT, version,
         )
 
 
@@ -102,7 +104,7 @@ def _parse_interline(sheet_xml: ElementTree.Element) -> float:
             return float(interline_el.attrib["main"])
     except (KeyError, ValueError):
         pass
-    logger.debug("Stage 5: could not read interline from scale; using fallback value.")
+    logger.debug("Stage %d: could not read interline from scale; using fallback value.", Stage.LAYOUT)
     return 20.0
 
 
@@ -130,7 +132,7 @@ def _collect_glyph_bounds(sys_el: ElementTree.Element) -> list[tuple[int, int, i
             except (KeyError, ValueError):
                 pass
     except Exception:
-        logger.debug("Stage 5: failed to collect glyph bounds; falling back to staff-line bounds only.")
+        logger.debug("Stage %d: failed to collect glyph bounds; falling back to staff-line bounds only.", Stage.LAYOUT)
     return result
 
 

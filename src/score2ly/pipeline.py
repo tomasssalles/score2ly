@@ -10,6 +10,7 @@ from pdf2image import convert_from_path
 
 from score2ly import audiveris, image_processing, metadata, musicxml2ly, omr_layout, pdf
 from score2ly.settings import ConvertSettings
+from score2ly.stages import Stage
 from score2ly.utils import relative
 
 logger = logging.getLogger(__name__)
@@ -18,65 +19,65 @@ logger = logging.getLogger(__name__)
 def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
     if settings is None:
         settings = ConvertSettings()
-    _stage_1(input_path, output_dir)
-    _stage_2(output_dir, settings)
-    _stage_3(output_dir)
-    _stage_4(output_dir)
-    _stage_5(output_dir)
-    _stage_6(output_dir)
-    _stage_7(output_dir)
+    _stage_copy_original(input_path, output_dir)
+    _stage_preprocess(output_dir, settings)
+    _stage_omr(output_dir)
+    _stage_export_musicxml(output_dir)
+    _stage_extract_layout(output_dir)
+    _stage_crop(output_dir)
+    _stage_musicxml2ly(output_dir)
 
 
-def _stage_1(input_path: Path | None, output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, 1)
+def _stage_copy_original(input_path: Path | None, output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.ORIGINAL)
     if existing is not None:
         dest_existing = output_dir / existing["output"]
         if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage 1: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.ORIGINAL)
             return
 
     if input_path is None:
         raise ValueError(
-            "Stage 1: No input path provided and no valid copy of original score available. Aborting pipeline..."
+            f"Stage {Stage.ORIGINAL}: No input path provided and no valid copy of original score available. Aborting pipeline..."
         )
 
-    dest = output_dir / f"01.original{input_path.suffix}"
+    dest = output_dir / f"{int(Stage.ORIGINAL):02d}.original{input_path.suffix}"
     shutil.copy2(input_path, dest)
-    metadata.update_stage(output_dir, 1, {
+    metadata.update_stage(output_dir, Stage.ORIGINAL, {
         "description": "Copy original score into the .s2l bundle to make it self-contained",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 1: Done. Copied the original score %s into the .s2l bundle (%s)", input_path, dest)
+    logger.info("Stage %d: Done. Copied the original score %s into the .s2l bundle (%s)", Stage.ORIGINAL, input_path, dest)
 
 
-def _stage_2(output_dir: Path, settings: ConvertSettings) -> None:
-    existing = metadata.get_stage(output_dir, 2)
+def _stage_preprocess(output_dir: Path, settings: ConvertSettings) -> None:
+    existing = metadata.get_stage(output_dir, Stage.PREPROCESS)
     if existing is not None:
         dest_existing = output_dir / existing["output"]
         if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage 2: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.PREPROCESS)
             return
 
-    stage1 = metadata.get_stage(output_dir, 1)
-    source = output_dir / stage1["output"]
-    dest = output_dir / "02.preprocessed.pdf"
+    stage_original = metadata.get_stage(output_dir, Stage.ORIGINAL)
+    source = output_dir / stage_original["output"]
+    dest = output_dir / f"{int(Stage.PREPROCESS):02d}.preprocessed.pdf"
 
     run_preprocessing: bool
     if not settings.preprocess_images:
-        logger.info("Stage 2: image preprocessing disabled, symlinking original.")
+        logger.info("Stage %d: image preprocessing disabled, symlinking original.", Stage.PREPROCESS)
         run_preprocessing = False
     elif settings.pdf_kind == "vector":
-        logger.info("Stage 2: vector PDF, symlinking original.")
+        logger.info("Stage %d: vector PDF, symlinking original.", Stage.PREPROCESS)
         run_preprocessing = False
     elif settings.pdf_kind == "scan":
-        logger.info("Stage 2: scan PDF, running preprocessing.")
+        logger.info("Stage %d: scan PDF, running preprocessing.", Stage.PREPROCESS)
         run_preprocessing = True
     elif pdf.is_vector(source):
-        logger.info("Stage 2: vector PDF detected, symlinking original.")
+        logger.info("Stage %d: vector PDF detected, symlinking original.", Stage.PREPROCESS)
         run_preprocessing = False
     else:
-        logger.info("Stage 2: scan detected, running preprocessing.")
+        logger.info("Stage %d: scan detected, running preprocessing.", Stage.PREPROCESS)
         run_preprocessing = True
 
     if not run_preprocessing:
@@ -89,22 +90,22 @@ def _stage_2(output_dir: Path, settings: ConvertSettings) -> None:
             )
         _preprocess_scan(source, dest, settings, output_dir / "img_processing_debug")
 
-    metadata.update_stage(output_dir, 2, {
+    metadata.update_stage(output_dir, Stage.PREPROCESS, {
         "description": "Preprocess PDF pages for improved OMR accuracy",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 2: Done.")
+    logger.info("Stage %d: Done.", Stage.PREPROCESS)
 
 
 def _preprocess_scan(source: Path, dest: Path, settings: ConvertSettings, debug_dir: Path) -> None:
-    logger.info("Stage 2: rasterizing pages at 300 DPI...")
+    logger.info("Stage %d: rasterizing pages at 300 DPI...", Stage.PREPROCESS)
     images = convert_from_path(source, dpi=300)
-    logger.info("Stage 2: rasterized %d page(s).", len(images))
+    logger.info("Stage %d: rasterized %d page(s).", Stage.PREPROCESS, len(images))
 
     image_bytes = []
     for i, image in enumerate(images):
-        logger.info("Stage 2: preprocessing page %d/%d...", i + 1, len(images))
+        logger.info("Stage %d: preprocessing page %d/%d...", Stage.PREPROCESS, i + 1, len(images))
         gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
 
         debug_dir_i = debug_dir / f"page_{i + 1:03d}"
@@ -125,101 +126,101 @@ def _preprocess_scan(source: Path, dest: Path, settings: ConvertSettings, debug_
         _, buf = cv2.imencode(".png", gray)
         image_bytes.append(buf.tobytes())
 
-    logger.info("Stage 2: reassembling pages into PDF...")
+    logger.info("Stage %d: reassembling pages into PDF...", Stage.PREPROCESS)
     dest.write_bytes(img2pdf.convert(image_bytes))
 
 
-def _stage_3(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, 3)
+def _stage_omr(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.OMR)
     if existing is not None:
         dest_existing = output_dir / existing["output"]
         if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage 3: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.OMR)
             return
 
-    stage2 = metadata.get_stage(output_dir, 2)
-    source = output_dir / stage2["output"]
+    stage_preprocess = metadata.get_stage(output_dir, Stage.PREPROCESS)
+    source = output_dir / stage_preprocess["output"]
 
-    work_dir = output_dir / "03.omr_work"
+    work_dir = output_dir / f"{int(Stage.OMR):02d}.omr_work"
     omr_output = audiveris.run_omr(source, work_dir)
 
-    dest = output_dir / "03.audiveris-project.omr"
+    dest = output_dir / f"{int(Stage.OMR):02d}.audiveris-project.omr"
     dest.symlink_to(omr_output.relative_to(dest.parent, walk_up=True))
 
-    metadata.update_stage(output_dir, 3, {
+    metadata.update_stage(output_dir, Stage.OMR, {
         "description": "OMR transcription via Audiveris",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 3: Done.")
+    logger.info("Stage %d: Done.", Stage.OMR)
 
 
-def _stage_4(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, 4)
+def _stage_export_musicxml(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.MUSICXML)
     if existing is not None:
         dest_existing = output_dir / existing["output"]
         if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage 4: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.MUSICXML)
             return
 
-    stage3 = metadata.get_stage(output_dir, 3)
-    source = output_dir / stage3["output"]
+    stage_omr = metadata.get_stage(output_dir, Stage.OMR)
+    source = output_dir / stage_omr["output"]
 
-    work_dir = output_dir / "04.export_work"
+    work_dir = output_dir / f"{int(Stage.MUSICXML):02d}.export_work"
     xml_output = audiveris.export_xml(source, work_dir)
 
-    dest = output_dir / "04.musicxml.xml"
+    dest = output_dir / f"{int(Stage.MUSICXML):02d}.musicxml.xml"
     dest.symlink_to(xml_output.relative_to(dest.parent, walk_up=True))
 
-    metadata.update_stage(output_dir, 4, {
+    metadata.update_stage(output_dir, Stage.MUSICXML, {
         "description": "Export MusicXML from Audiveris .omr project",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 4: Done.")
+    logger.info("Stage %d: Done.", Stage.MUSICXML)
 
 
-def _stage_5(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, 5)
+def _stage_extract_layout(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.LAYOUT)
     if existing is not None:
         dest_existing = output_dir / existing["output"]
         if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage 5: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.LAYOUT)
             return
 
-    stage3 = metadata.get_stage(output_dir, 3)
-    source = output_dir / stage3["output"]
+    stage_omr = metadata.get_stage(output_dir, Stage.OMR)
+    source = output_dir / stage_omr["output"]
 
-    dest = output_dir / "05.omr_layout.json"
+    dest = output_dir / f"{int(Stage.LAYOUT):02d}.omr_layout.json"
     layout = omr_layout.extract(source)
     dest.write_text(json.dumps(layout, indent=2))
 
-    metadata.update_stage(output_dir, 5, {
+    metadata.update_stage(output_dir, Stage.LAYOUT, {
         "description": "Extract system and measure layout from Audiveris .omr project",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 5: Done.")
+    logger.info("Stage %d: Done.", Stage.LAYOUT)
 
 
-def _stage_6(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, 6)
+def _stage_crop(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.IMAGES)
     if existing is not None:
         checksums = existing.get("checksums", {})
         if checksums and all(
             (output_dir / p).exists() and metadata.checksum(output_dir / p) == c
             for p, c in checksums.items()
         ):
-            logger.info("Stage 6: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.IMAGES)
             return
 
-    stage2 = metadata.get_stage(output_dir, 2)
-    pdf_path = output_dir / stage2["output"]
+    stage_preprocess = metadata.get_stage(output_dir, Stage.PREPROCESS)
+    pdf_path = output_dir / stage_preprocess["output"]
 
-    stage5 = metadata.get_stage(output_dir, 5)
-    layout = json.loads((output_dir / stage5["output"]).read_text())
+    stage_layout = metadata.get_stage(output_dir, Stage.LAYOUT)
+    layout = json.loads((output_dir / stage_layout["output"]).read_text())
 
-    images_dir = output_dir / "06.images"
+    images_dir = output_dir / f"{int(Stage.IMAGES):02d}.images"
     pages_dir = images_dir / "pages"
     systems_dir = images_dir / "systems"
     measures_dir = images_dir / "measures"
@@ -233,7 +234,7 @@ def _stage_6(output_dir: Path) -> None:
     for sheet in layout["sheets"]:
         sheet_num = sheet["sheet"]
         page_w, page_h = sheet["width"], sheet["height"]
-        logger.info("Stage 6: rasterizing page %d...", sheet_num)
+        logger.info("Stage %d: rasterizing page %d...", Stage.IMAGES, sheet_num)
         page_img = convert_from_path(pdf_path, size=(page_w, page_h), first_page=sheet_num, last_page=sheet_num)[0]
 
         page_path = pages_dir / f"page_{sheet_num:04d}.png"
@@ -251,31 +252,31 @@ def _stage_6(output_dir: Path) -> None:
                 image_processing.crop_and_save(page_img, measure["bounds"], meas_path)
                 checksums[str(relative(meas_path, output_dir))] = metadata.checksum(meas_path)
 
-    metadata.update_stage(output_dir, 6, {
+    metadata.update_stage(output_dir, Stage.IMAGES, {
         "description": "Rasterize pages and crop system and measure images from preprocessed PDF",
         "output": str(relative(images_dir, output_dir)),
         "checksums": checksums,
     })
-    logger.info("Stage 6: Done.")
+    logger.info("Stage %d: Done.", Stage.IMAGES)
 
 
-def _stage_7(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, 7)
+def _stage_musicxml2ly(output_dir: Path) -> None:
+    existing = metadata.get_stage(output_dir, Stage.LILYPOND)
     if existing is not None:
         dest_existing = output_dir / existing["output"]
         if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage 7: already complete, skipping.")
+            logger.info("Stage %d: already complete, skipping.", Stage.LILYPOND)
             return
 
-    stage4 = metadata.get_stage(output_dir, 4)
-    source = output_dir / stage4["output"]
+    stage_musicxml = metadata.get_stage(output_dir, Stage.MUSICXML)
+    source = output_dir / stage_musicxml["output"]
 
-    dest = output_dir / "07.lilypond.ly"
+    dest = output_dir / f"{int(Stage.LILYPOND):02d}.lilypond.ly"
     musicxml2ly.run(source, dest)
 
-    metadata.update_stage(output_dir, 7, {
+    metadata.update_stage(output_dir, Stage.LILYPOND, {
         "description": "Convert MusicXML to LilyPond via musicxml2ly",
         "output": str(relative(dest, output_dir)),
         "checksum": metadata.checksum(dest),
     })
-    logger.info("Stage 7: Done.")
+    logger.info("Stage %d: Done.", Stage.LILYPOND)
