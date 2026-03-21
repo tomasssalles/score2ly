@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
     _stage_copy_original(input_path, output_dir)
     _stage_preprocess(output_dir, settings or ConvertSettings())
-    # _stage_omr(output_dir)
+    _stage_omr(output_dir)
     # _stage_export_musicxml(output_dir)
     # _stage_extract_layout(output_dir)
     # _stage_crop(output_dir)
@@ -124,24 +124,35 @@ def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings) -> 
 def _stage_omr(output_dir: Path) -> None:
     existing = metadata.get_stage(output_dir, Stage.OMR)
     if existing is not None:
-        dest_existing = output_dir / existing["output"]
-        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
+        checksums = existing.get("checksums", {})
+        if checksums and all(
+            (output_dir / p).exists() and metadata.checksum(output_dir / p) == c
+            for p, c in checksums.items()
+        ):
             logger.info("Stage %d: already complete, skipping.", Stage.OMR)
             return
 
     stage_preprocess = metadata.get_stage(output_dir, Stage.PREPROCESS)
-    source = output_dir / stage_preprocess["output"]
+    pages_dir = output_dir / stage_preprocess["output"]
+    page_paths = sorted(pages_dir.glob("*.png"))
 
-    work_dir = output_dir / f"{int(Stage.OMR):02d}.omr_work"
-    omr_output = audiveris.run_omr(source, work_dir)
+    work_dir = output_dir / f"{int(Stage.OMR):02d}.audiveris_omr"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir()
 
-    dest = output_dir / f"{int(Stage.OMR):02d}.audiveris-project.omr"
-    dest.symlink_to(omr_output.relative_to(dest.parent, walk_up=True))
+    # update_stage is only reached if all pages succeed — a partial run leaves
+    # the stage unrecorded so it will be retried in full on the next invocation
+    checksums = {}
+    for i, page_path in enumerate(page_paths):
+        logger.info("Stage %d: processing page %d/%d...", Stage.OMR, i + 1, len(page_paths))
+        omr_path = audiveris.run_omr(page_path, work_dir)
+        checksums[str(relative(omr_path, output_dir))] = metadata.checksum(omr_path)
 
     metadata.update_stage(output_dir, Stage.OMR, {
-        "description": "OMR transcription via Audiveris",
-        "output": str(relative(dest, output_dir)),
-        "checksum": metadata.checksum(dest),
+        "description": "OMR transcription via Audiveris, one .omr project per page",
+        "output": str(relative(work_dir, output_dir)),
+        "checksums": checksums,
     })
     logger.info("Stage %d: Done.", Stage.OMR)
 

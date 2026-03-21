@@ -40,12 +40,12 @@ def find_executable() -> Path:
     )
 
 
-def run_omr(input_pdf: Path, work_dir: Path) -> Path:
+def run_omr(input_path: Path, work_dir: Path) -> Path:
     exe = find_executable()
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = [str(exe), "-batch", "-transcribe", "-save", "-output", str(work_dir), str(input_pdf)]
-    logger.info("Stage %d: running Audiveris OMR on %s...", Stage.OMR, input_pdf.name)
+    cmd = [str(exe), "-batch", "-transcribe", "-save", "-output", str(work_dir), str(input_path)]
+    logger.info("Stage %d: running Audiveris OMR on %s...", Stage.OMR, input_path.name)
     logger.debug("Stage %d: command: %s", Stage.OMR, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -54,10 +54,10 @@ def run_omr(input_pdf: Path, work_dir: Path) -> Path:
         log_hint = f"See log: {log_files[-1]}" if log_files else f"No log file found in {work_dir}"
         raise RuntimeError(f"Audiveris OMR failed (exit code {result.returncode}). {log_hint}")
 
-    omr_files = sorted(work_dir.glob("*.omr"))
-    if not omr_files:
-        raise RuntimeError("Audiveris ran but produced no .omr output in " + str(work_dir))
-    return omr_files[0]
+    expected = work_dir / f"{input_path.stem}.omr"
+    if not expected.exists():
+        raise RuntimeError(f"Audiveris ran but produced no .omr output at {expected}")
+    return expected
 
 
 def export_xml(omr_path: Path, work_dir: Path) -> Path:
