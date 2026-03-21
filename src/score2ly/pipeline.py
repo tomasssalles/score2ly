@@ -4,7 +4,6 @@ import shutil
 from pathlib import Path
 
 import cv2
-import img2pdf
 import numpy as np
 from pdf2image import convert_from_path
 
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
     _stage_copy_original(input_path, output_dir)
-    # _stage_preprocess(output_dir, settings or ConvertSettings())
+    _stage_preprocess(output_dir, settings or ConvertSettings())
     # _stage_omr(output_dir)
     # _stage_export_musicxml(output_dir)
     # _stage_extract_layout(output_dir)
@@ -53,80 +52,73 @@ def _stage_copy_original(input_path: Path | None, output_dir: Path) -> None:
 def _stage_preprocess(output_dir: Path, settings: ConvertSettings) -> None:
     existing = metadata.get_stage(output_dir, Stage.PREPROCESS)
     if existing is not None:
-        dest_existing = output_dir / existing["output"]
-        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
+        checksums = existing.get("checksums", {})
+        if checksums and all(
+            (output_dir / p).exists() and metadata.checksum(output_dir / p) == c
+            for p, c in checksums.items()
+        ):
             logger.info("Stage %d: already complete, skipping.", Stage.PREPROCESS)
             return
 
     stage_original = metadata.get_stage(output_dir, Stage.ORIGINAL)
     source = output_dir / stage_original["output"]
-    dest = output_dir / f"{int(Stage.PREPROCESS):02d}.preprocessed.pdf"
 
-    run_preprocessing: bool
-    if not settings.preprocess_images:
-        logger.info("Stage %d: image preprocessing disabled, symlinking original.", Stage.PREPROCESS)
-        run_preprocessing = False
-    elif settings.pdf_kind == "vector":
-        logger.info("Stage %d: vector PDF, symlinking original.", Stage.PREPROCESS)
-        run_preprocessing = False
-    elif settings.pdf_kind == "scan":
-        logger.info("Stage %d: scan PDF, running preprocessing.", Stage.PREPROCESS)
-        run_preprocessing = True
-    elif pdf.is_vector(source):
-        logger.info("Stage %d: vector PDF detected, symlinking original.", Stage.PREPROCESS)
-        run_preprocessing = False
-    else:
-        logger.info("Stage %d: scan detected, running preprocessing.", Stage.PREPROCESS)
-        run_preprocessing = True
+    run_heavy = _should_run_heavy_preprocessing(source, settings)
 
-    if not run_preprocessing:
-        dest.symlink_to(source.relative_to(dest.parent, walk_up=True))
-    else:
-        if settings.preprocessing_is_noop():
-            raise ValueError(
-                "Image preprocessing is enabled but all steps are disabled. "
-                "Enable at least one step (e.g. --deskew, --clahe, --sheet-method, --block-method)."
-            )
-        _preprocess_scan(source, dest, settings, output_dir / "img_processing_debug")
+    pages_dir = output_dir / f"{int(Stage.PREPROCESS):02d}.pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
 
-    metadata.update_stage(output_dir, Stage.PREPROCESS, {
-        "description": "Preprocess PDF pages for improved OMR accuracy",
-        "output": str(relative(dest, output_dir)),
-        "checksum": metadata.checksum(dest),
-    })
-    logger.info("Stage %d: Done.", Stage.PREPROCESS)
-
-
-def _preprocess_scan(source: Path, dest: Path, settings: ConvertSettings, debug_dir: Path) -> None:
     logger.info("Stage %d: rasterizing pages at 300 DPI...", Stage.PREPROCESS)
     images = convert_from_path(source, dpi=300)
     logger.info("Stage %d: rasterized %d page(s).", Stage.PREPROCESS, len(images))
 
-    image_bytes = []
+    checksums = {}
     for i, image in enumerate(images):
-        logger.info("Stage %d: preprocessing page %d/%d...", Stage.PREPROCESS, i + 1, len(images))
+        logger.info("Stage %d: processing page %d/%d...", Stage.PREPROCESS, i + 1, len(images))
         gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
 
-        debug_dir_i = debug_dir / f"page_{i + 1:03d}"
-        debug_dir_i.mkdir(parents=True, exist_ok=True)
+        if run_heavy:
+            debug_dir_i = output_dir / f"img_processing_debug/page_{i + 1:03d}"
+            debug_dir_i.mkdir(parents=True, exist_ok=True)
+            gray = image_processing.process_page(
+                gray,
+                sheet_method=settings.sheet_method,
+                block_method=settings.block_method,
+                deskew=settings.deskew,
+                tight_crop=settings.tight_crop,
+                clahe=settings.clahe,
+                projection_k=settings.projection_k,
+                projection_denoise=settings.projection_denoise,
+                debug_dir=debug_dir_i,
+            )
 
-        gray = image_processing.process_page(
-            gray,
-            sheet_method=settings.sheet_method,
-            block_method=settings.block_method,
-            deskew=settings.deskew,
-            tight_crop=settings.tight_crop,
-            clahe=settings.clahe,
-            projection_k=settings.projection_k,
-            projection_denoise=settings.projection_denoise,
-            debug_dir=debug_dir_i,
-        )
+        page_path = pages_dir / f"page_{i + 1:04d}.png"
+        cv2.imwrite(str(page_path), gray)
+        checksums[str(relative(page_path, output_dir))] = metadata.checksum(page_path)
 
-        _, buf = cv2.imencode(".png", gray)
-        image_bytes.append(buf.tobytes())
+    metadata.update_stage(output_dir, Stage.PREPROCESS, {
+        "description": "Rasterize PDF pages to grayscale PNGs, with optional targeted processing for OMR",
+        "output": str(relative(pages_dir, output_dir)),
+        "checksums": checksums,
+    })
+    logger.info("Stage %d: Done.", Stage.PREPROCESS)
 
-    logger.info("Stage %d: reassembling pages into PDF...", Stage.PREPROCESS)
-    dest.write_bytes(img2pdf.convert(image_bytes))
+
+def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings) -> bool:
+    if not settings.preprocess_images or settings.preprocessing_is_noop():
+        logger.info("Stage %d: heavy preprocessing disabled, skipping.", Stage.PREPROCESS)
+        return False
+    if settings.pdf_kind == "vector":
+        logger.info("Stage %d: vector PDF, skipping heavy preprocessing.", Stage.PREPROCESS)
+        return False
+    if settings.pdf_kind == "scan":
+        logger.info("Stage %d: scan PDF, running heavy preprocessing.", Stage.PREPROCESS)
+        return True
+    if pdf.is_vector(source):
+        logger.info("Stage %d: vector PDF detected, skipping heavy preprocessing.", Stage.PREPROCESS)
+        return False
+    logger.info("Stage %d: scan detected, running heavy preprocessing.", Stage.PREPROCESS)
+    return True
 
 
 def _stage_omr(output_dir: Path) -> None:
