@@ -17,16 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
-    if settings is None:
-        settings = ConvertSettings()
     _stage_copy_original(input_path, output_dir)
-    _stage_preprocess(output_dir, settings)
-    _stage_omr(output_dir)
-    _stage_export_musicxml(output_dir)
-    _stage_extract_layout(output_dir)
-    _stage_crop(output_dir)
-    _stage_musicxml2ly(output_dir)
-    _stage_render(output_dir)
+    # _stage_preprocess(output_dir, settings or ConvertSettings())
+    # _stage_omr(output_dir)
+    # _stage_export_musicxml(output_dir)
+    # _stage_extract_layout(output_dir)
+    # _stage_crop(output_dir)
+    # _stage_musicxml2ly(output_dir)
+    # _stage_render(output_dir)
 
 
 def _stage_copy_original(input_path: Path | None, output_dir: Path) -> None:
