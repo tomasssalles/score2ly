@@ -54,6 +54,10 @@ def get_stage(output_dir: Path, stage: Stage) -> dict | None:
     return _load(output_dir)["stages"].get(str(int(stage)))
 
 
+def get_stages(output_dir: Path) -> dict[Stage, dict]:
+    return {Stage(int(k)): v for k, v in _load(output_dir)["stages"].items()}
+
+
 def update_stage(output_dir: Path, stage: Stage, stage_data: dict) -> None:
     data = _load(output_dir)
     data["stages"][str(int(stage))] = stage_data
