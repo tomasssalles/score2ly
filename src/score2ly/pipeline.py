@@ -36,6 +36,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             dependencies=(Stage.ORIGINAL,),
             fn=_preprocess,
         ),
+        _StageParams(
+            stage=Stage.OMR,
+            description="OMR transcription via Audiveris, one .omr project per page",
+            output_dir_name="audiveris_omr",
+            dependencies=(Stage.PREPROCESS,),
+            fn=_omr,
+        ),
     )
 
     for params in stages:
@@ -232,43 +239,27 @@ def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings) -> 
     return True
 
 
-# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
+def _omr(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+) -> Sequence[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    page_paths = sorted(
+        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.PREPROCESS]
+    )
 
-
-def _stage_omr(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, Stage.OMR)
-    if existing is not None:
-        checksums = existing.get("checksums", {})
-        if checksums and all(
-            (output_dir / p).exists() and metadata.checksum(output_dir / p) == c
-            for p, c in checksums.items()
-        ):
-            logger.info("Stage %d: already complete, skipping.", Stage.OMR)
-            return
-
-    stage_preprocess = metadata.get_stage(output_dir, Stage.PREPROCESS)
-    pages_dir = output_dir / stage_preprocess["output"]
-    page_paths = sorted(pages_dir.glob("*.png"))
-
-    work_dir = output_dir / f"{int(Stage.OMR):02d}.audiveris_omr"
-    if work_dir.exists():
-        shutil.rmtree(work_dir)
-    work_dir.mkdir()
-
-    # update_stage is only reached if all pages succeed — a partial run leaves
-    # the stage unrecorded so it will be retried in full on the next invocation
-    checksums = {}
+    outputs = []
     for i, page_path in enumerate(page_paths):
-        logger.info("Stage %d: processing page %d/%d...", Stage.OMR, i + 1, len(page_paths))
-        omr_path = audiveris.run_omr(page_path, work_dir)
-        checksums[str(relative(omr_path, output_dir))] = metadata.checksum(omr_path)
+        logger.info("Stage %d: Processing page %d/%d...", Stage.OMR, i + 1, len(page_paths))
+        omr_path = audiveris.run_omr(page_path, stage_output_dir)
+        outputs.append(omr_path)
 
-    metadata.update_stage(output_dir, Stage.OMR, {
-        "description": "OMR transcription via Audiveris, one .omr project per page",
-        "output": str(relative(work_dir, output_dir)),
-        "checksums": checksums,
-    })
-    logger.info("Stage %d: Done.", Stage.OMR)
+    return outputs
+
+
+# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
 
 
 def _stage_export_musicxml(output_dir: Path) -> None:
