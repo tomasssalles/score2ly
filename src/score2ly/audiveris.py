@@ -71,7 +71,7 @@ def export_xml(omr_path: Path, work_dir: Path) -> Path:
     omr_link.symlink_to(omr_path.relative_to(omr_link.parent, walk_up=True))
 
     logger.info("Stage %d: Exporting MusicXML from %s...", Stage.MUSICXML, omr_path.name)
-    extra_args = ["-export", "-option", "org.audiveris.omr.sheet.BookManager.useCompression=false", str(omr_link)]
+    extra_args = ["-export", "-constant", "org.audiveris.omr.sheet.BookManager.useCompression=false", str(omr_link)]
     _run_audiveris(extra_args, work_dir, Stage.MUSICXML, "MusicXML export")
 
     expected = omr_link.with_suffix(".xml")
