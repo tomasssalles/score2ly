@@ -29,6 +29,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             dependencies=(),
             fn=_copy_original,
         ),
+        _StageParams(
+            stage=Stage.PREPROCESS,
+            description="Rasterize PDF pages to grayscale PNGs, with optional targeted processing for OMR",
+            output_dir_name="pages",
+            dependencies=(Stage.ORIGINAL,),
+            fn=_preprocess,
+        ),
     )
 
     for params in stages:
@@ -166,38 +173,28 @@ def _copy_original(
     return (dest,)
 
 
-# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
-
-def _stage_preprocess(output_dir: Path, settings: ConvertSettings) -> None:
-    existing = metadata.get_stage(output_dir, Stage.PREPROCESS)
-    if existing is not None:
-        checksums = existing.get("checksums", {})
-        if checksums and all(
-            (output_dir / p).exists() and metadata.checksum(output_dir / p) == c
-            for p, c in checksums.items()
-        ):
-            logger.info("Stage %d: already complete, skipping.", Stage.PREPROCESS)
-            return
-
-    stage_original = metadata.get_stage(output_dir, Stage.ORIGINAL)
-    source = output_dir / stage_original["output"]
+def _preprocess(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+) -> Sequence[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    source = pipeline_output_dir / dependencies_to_outputs[Stage.ORIGINAL][0]
 
     run_heavy = _should_run_heavy_preprocessing(source, settings)
 
-    pages_dir = output_dir / f"{int(Stage.PREPROCESS):02d}.pages"
-    pages_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info("Stage %d: rasterizing pages at 300 DPI...", Stage.PREPROCESS)
+    logger.info("Stage %d: Rasterizing pages at 300 DPI...", Stage.PREPROCESS)
     images = convert_from_path(source, dpi=300)
-    logger.info("Stage %d: rasterized %d page(s).", Stage.PREPROCESS, len(images))
+    logger.info("Stage %d: Rasterized %d page(s).", Stage.PREPROCESS, len(images))
 
-    checksums = {}
+    outputs = []
     for i, image in enumerate(images):
-        logger.info("Stage %d: processing page %d/%d...", Stage.PREPROCESS, i + 1, len(images))
+        logger.info("Stage %d: Processing page %d/%d...", Stage.PREPROCESS, i + 1, len(images))
         gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
 
         if run_heavy:
-            debug_dir_i = output_dir / f"img_processing_debug/page_{i + 1:03d}"
+            debug_dir_i = pipeline_output_dir / f"img_processing_debug/page_{i + 1:03d}"
             debug_dir_i.mkdir(parents=True, exist_ok=True)
             gray = image_processing.process_page(
                 gray,
@@ -211,33 +208,31 @@ def _stage_preprocess(output_dir: Path, settings: ConvertSettings) -> None:
                 debug_dir=debug_dir_i,
             )
 
-        page_path = pages_dir / f"page_{i + 1:04d}.png"
+        page_path = stage_output_dir / f"page_{i + 1:04d}.png"
         cv2.imwrite(str(page_path), gray)
-        checksums[str(relative(page_path, output_dir))] = metadata.checksum(page_path)
+        outputs.append(page_path)
 
-    metadata.update_stage(output_dir, Stage.PREPROCESS, {
-        "description": "Rasterize PDF pages to grayscale PNGs, with optional targeted processing for OMR",
-        "output": str(relative(pages_dir, output_dir)),
-        "checksums": checksums,
-    })
-    logger.info("Stage %d: Done.", Stage.PREPROCESS)
+    return outputs
 
 
 def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings) -> bool:
     if not settings.preprocess_images or settings.preprocessing_is_noop():
-        logger.info("Stage %d: heavy preprocessing disabled, skipping.", Stage.PREPROCESS)
+        logger.info("Stage %d: Heavy preprocessing disabled, skipping.", Stage.PREPROCESS)
         return False
     if settings.pdf_kind == "vector":
-        logger.info("Stage %d: vector PDF, skipping heavy preprocessing.", Stage.PREPROCESS)
+        logger.info("Stage %d: Vector PDF, skipping heavy preprocessing.", Stage.PREPROCESS)
         return False
     if settings.pdf_kind == "scan":
-        logger.info("Stage %d: scan PDF, running heavy preprocessing.", Stage.PREPROCESS)
+        logger.info("Stage %d: Scan PDF, running heavy preprocessing.", Stage.PREPROCESS)
         return True
     if pdf.is_vector(source):
-        logger.info("Stage %d: vector PDF detected, skipping heavy preprocessing.", Stage.PREPROCESS)
+        logger.info("Stage %d: Vector PDF detected, skipping heavy preprocessing.", Stage.PREPROCESS)
         return False
-    logger.info("Stage %d: scan detected, running heavy preprocessing.", Stage.PREPROCESS)
+    logger.info("Stage %d: Scan detected, running heavy preprocessing.", Stage.PREPROCESS)
     return True
+
+
+# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
 
 
 def _stage_omr(output_dir: Path) -> None:
