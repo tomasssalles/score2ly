@@ -43,6 +43,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             dependencies=(Stage.PREPROCESS,),
             fn=_omr,
         ),
+        _StageParams(
+            stage=Stage.MUSICXML,
+            description="Export MusicXML from Audiveris .omr projects, one per page",
+            output_dir_name="musicxml",
+            dependencies=(Stage.OMR,),
+            fn=_export_musicxml,
+        ),
     )
 
     for params in stages:
@@ -259,32 +266,27 @@ def _omr(
     return outputs
 
 
+def _export_musicxml(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+) -> Sequence[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    omr_paths = sorted(
+        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.OMR]
+    )
+
+    outputs = []
+    for i, omr_path in enumerate(omr_paths):
+        logger.info("Stage %d: Processing page %d/%d...", Stage.MUSICXML, i + 1, len(omr_paths))
+        xml_path = audiveris.export_xml(omr_path, stage_output_dir)
+        outputs.append(xml_path)
+
+    return outputs
+
+
 # -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
-
-
-def _stage_export_musicxml(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, Stage.MUSICXML)
-    if existing is not None:
-        dest_existing = output_dir / existing["output"]
-        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage %d: already complete, skipping.", Stage.MUSICXML)
-            return
-
-    stage_omr = metadata.get_stage(output_dir, Stage.OMR)
-    source = output_dir / stage_omr["output"]
-
-    work_dir = output_dir / f"{int(Stage.MUSICXML):02d}.export_work"
-    xml_output = audiveris.export_xml(source, work_dir)
-
-    dest = output_dir / f"{int(Stage.MUSICXML):02d}.musicxml.xml"
-    dest.symlink_to(xml_output.relative_to(dest.parent, walk_up=True))
-
-    metadata.update_stage(output_dir, Stage.MUSICXML, {
-        "description": "Export MusicXML from Audiveris .omr project",
-        "output": str(relative(dest, output_dir)),
-        "checksum": metadata.checksum(dest),
-    })
-    logger.info("Stage %d: Done.", Stage.MUSICXML)
 
 
 def _stage_extract_layout(output_dir: Path) -> None:

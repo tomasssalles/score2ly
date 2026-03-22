@@ -2,9 +2,7 @@ import logging
 import os
 import shutil
 import subprocess
-import zipfile
 from pathlib import Path
-from xml.etree import ElementTree
 
 from score2ly.stages import Stage
 
@@ -40,19 +38,24 @@ def find_executable() -> Path:
     )
 
 
-def run_omr(input_path: Path, work_dir: Path) -> Path:
+def _run_audiveris(extra_args: list[str], work_dir: Path, stage: Stage, identifier: str) -> None:
     exe = find_executable()
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = [str(exe), "-batch", "-transcribe", "-save", "-output", str(work_dir), str(input_path)]
-    logger.info("Stage %d: running Audiveris OMR on %s...", Stage.OMR, input_path.name)
-    logger.debug("Stage %d: command: %s", Stage.OMR, " ".join(cmd))
+    cmd = [str(exe), "-batch", "-output", str(work_dir), *extra_args]
+    logger.debug("Stage %d: command: %s", stage, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         log_files = sorted(work_dir.glob("*.log"))
         log_hint = f"See log: {log_files[-1]}" if log_files else f"No log file found in {work_dir}"
-        raise RuntimeError(f"Audiveris OMR failed (exit code {result.returncode}). {log_hint}")
+        raise RuntimeError(f"Audiveris {identifier} failed (exit code {result.returncode}). {log_hint}")
+
+
+
+def run_omr(input_path: Path, work_dir: Path) -> Path:
+    logger.info("Stage %d: running Audiveris OMR on %s...", Stage.OMR, input_path.name)
+    _run_audiveris(["-transcribe", "-save", str(input_path)], work_dir, Stage.OMR, "OMR transcription")
 
     expected = work_dir / f"{input_path.stem}.omr"
     if not expected.exists():
@@ -61,46 +64,17 @@ def run_omr(input_path: Path, work_dir: Path) -> Path:
 
 
 def export_xml(omr_path: Path, work_dir: Path) -> Path:
-    exe = find_executable()
-    work_dir.mkdir(parents=True, exist_ok=True)
-
     # Audiveris ignores -output for existing .omr books and writes the export next
     # to the input file. Symlink the .omr into work_dir so output lands there.
     omr_link = work_dir / omr_path.name
+    work_dir.mkdir(parents=True, exist_ok=True)
     omr_link.symlink_to(omr_path.relative_to(omr_link.parent, walk_up=True))
 
-    cmd = [str(exe), "-batch", "-export", str(omr_link)]
-    logger.info("Stage %d: exporting MusicXML from %s...", Stage.MUSICXML, omr_path.name)
-    logger.debug("Stage %d: command: %s", Stage.MUSICXML, " ".join(cmd))
+    logger.info("Stage %d: Exporting MusicXML from %s...", Stage.MUSICXML, omr_path.name)
+    extra_args = ["-export", "-option", "org.audiveris.omr.sheet.BookManager.useCompression=false", str(omr_link)]
+    _run_audiveris(extra_args, work_dir, Stage.MUSICXML, "MusicXML export")
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        log_files = sorted(work_dir.glob("*.log"))
-        log_hint = f"See log: {log_files[-1]}" if log_files else f"No log file found in {work_dir}"
-        raise RuntimeError(f"Audiveris export failed (exit code {result.returncode}). {log_hint}")
-
-    mxl_files = sorted(work_dir.glob("*.mxl"))
-    xml_files = sorted(work_dir.glob("*.xml"))
-
-    if mxl_files:
-        return _extract_mxl(mxl_files[0])
-    if xml_files:
-        return xml_files[0]
-    raise RuntimeError("Audiveris export produced no MusicXML output in " + str(work_dir))
-
-
-def _extract_mxl(mxl_path: Path) -> Path:
-    with zipfile.ZipFile(mxl_path) as z:
-        container = ElementTree.fromstring(z.read("META-INF/container.xml"))
-        root_file = container.find(".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile")
-        if root_file is None:
-            root_file = container.find(".//rootfile")
-        if root_file is None:
-            raise RuntimeError(f"Could not find rootfile in {mxl_path}/META-INF/container.xml")
-
-        xml_name = root_file.attrib["full-path"]
-        dest = mxl_path.with_suffix(".xml")
-        dest.write_bytes(z.read(xml_name))
-
-    logger.debug("Stage %d: extracted %s from %s", Stage.MUSICXML, xml_name, mxl_path.name)
-    return dest
+    expected = omr_link.with_suffix(".xml")
+    if not expected.exists():
+        raise RuntimeError(f"Audiveris export produced no XML output at {expected}")
+    return expected
