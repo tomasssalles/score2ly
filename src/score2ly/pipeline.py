@@ -313,9 +313,16 @@ def _extract_layout(
 
     combined_sheets = []
     measure_offset = 0
-    for omr_path in omr_paths:
+    global_system_id = 0
+    for page_num, omr_path in enumerate(omr_paths, start=1):
         result, measure_offset = omr_layout.extract(omr_path, stage_idx, initial_measure_offset=measure_offset)
-        combined_sheets.extend(result["sheets"])
+        for sheet in result["sheets"]:
+            sheet["sheet"] = page_num
+            for system in sheet["systems"]:
+                global_system_id += 1
+                system["local_id"] = system.pop("id")
+                system["global_id"] = global_system_id
+            combined_sheets.append(sheet)
 
     dest = stage_output_dir / "layout.json"
     dest.write_text(json.dumps({"sheets": combined_sheets}, indent=2))
