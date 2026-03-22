@@ -8,5 +8,3 @@ class Stage(Enum):
     MUSICXML   = "musicxml"
     LAYOUT     = "layout"
     IMAGES     = "images"
-    LILYPOND   = "lilypond"
-    RENDER     = "render"

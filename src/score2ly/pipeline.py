@@ -11,7 +11,7 @@ import numpy as np
 from pdf2image import convert_from_path
 from PIL import Image
 
-from score2ly import audiveris, image_processing, lilypond, metadata, musicxml2ly, omr_layout, pdf
+from score2ly import audiveris, image_processing, metadata, omr_layout, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
@@ -373,50 +373,3 @@ def _crop_images(
                 outputs.append(meas_path)
 
     return outputs
-
-
-# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
-
-
-def _stage_musicxml2ly(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, Stage.LILYPOND)
-    if existing is not None:
-        dest_existing = output_dir / existing["output"]
-        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage %d: already complete, skipping.", Stage.LILYPOND)
-            return
-
-    stage_musicxml = metadata.get_stage(output_dir, Stage.MUSICXML)
-    source = output_dir / stage_musicxml["output"]
-
-    dest = output_dir / f"{int(Stage.LILYPOND):02d}.lilypond.ly"
-    musicxml2ly.run(source, dest, Stage.LILYPOND)
-
-    metadata.update_stage(output_dir, Stage.LILYPOND, {
-        "description": "Convert MusicXML to LilyPond via musicxml2ly",
-        "output": str(relative(dest, output_dir)),
-        "checksum": metadata.checksum(dest),
-    })
-    logger.info("Stage %d: Done.", Stage.LILYPOND)
-
-
-def _stage_render(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, Stage.RENDER)
-    if existing is not None:
-        dest_existing = output_dir / existing["output"]
-        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage %d: already complete, skipping.", Stage.RENDER)
-            return
-
-    stage_lilypond = metadata.get_stage(output_dir, Stage.LILYPOND)
-    source = output_dir / stage_lilypond["output"]
-
-    dest = output_dir / f"{int(Stage.RENDER):02d}.rendered.pdf"
-    lilypond.render(source, dest, Stage.RENDER)
-
-    metadata.update_stage(output_dir, Stage.RENDER, {
-        "description": "Render LilyPond score to PDF",
-        "output": str(relative(dest, output_dir)),
-        "checksum": metadata.checksum(dest),
-    })
-    logger.info("Stage %d: Done.", Stage.RENDER)

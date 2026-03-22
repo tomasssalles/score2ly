@@ -381,6 +381,7 @@ dependencies = [
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "pdf2image" },
+    { name = "pillow" },
     { name = "pypdf" },
 ]
 
@@ -395,6 +396,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0" },
     { name = "opencv-python", specifier = ">=4.10" },
     { name = "pdf2image", specifier = ">=1.17" },
+    { name = "pillow", specifier = ">=10.0" },
     { name = "pypdf", specifier = ">=5.0" },
 ]
 
