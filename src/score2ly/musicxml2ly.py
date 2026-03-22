@@ -4,8 +4,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from score2ly.stages import Stage
-
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "MUSICXML2LY_PATH"
@@ -34,12 +32,12 @@ def find_executable() -> Path:
     )
 
 
-def run(input_xml: Path, output_ly: Path) -> None:
+def run(input_xml: Path, output_ly: Path, stage: int) -> None:
     exe = find_executable()
 
     cmd = [str(exe), str(input_xml), "-o", str(output_ly)]
-    logger.info("Stage %d: Converting MusicXML to LilyPond...", Stage.LILYPOND)
-    logger.debug("Stage %d: Command: %s", Stage.LILYPOND, " ".join(cmd))
+    logger.info("Stage %d: Converting MusicXML to LilyPond...", stage)
+    logger.debug("Stage %d: Command: %s", stage, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:

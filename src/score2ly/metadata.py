@@ -3,7 +3,6 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from score2ly.stages import Stage
 from score2ly.utils import relative
 
 METADATA_FILENAME = "score2ly.metadata.json"
@@ -50,16 +49,16 @@ def append_history(output_dir: Path, event: str) -> None:
     _save(output_dir, data)
 
 
-def get_stage(output_dir: Path, stage: Stage) -> dict | None:
-    return _load(output_dir)["stages"].get(str(int(stage)))
+def get_stage(output_dir: Path, stage: int) -> dict | None:
+    return _load(output_dir)["stages"].get(str(stage))
 
 
-def get_stages(output_dir: Path) -> dict[Stage, dict]:
-    return {Stage(int(k)): v for k, v in _load(output_dir)["stages"].items()}
+def get_stages(output_dir: Path) -> dict[int, dict]:
+    return {int(k): v for k, v in _load(output_dir)["stages"].items()}
 
 
-def update_stage(output_dir: Path, stage: Stage, stage_data: dict) -> None:
+def update_stage(output_dir: Path, stage: int, stage_data: dict) -> None:
     data = _load(output_dir)
-    data["stages"][str(int(stage))] = stage_data
-    data["history"].append({"event": f"stage-{int(stage)}-completed", "timestamp": _now()})
+    data["stages"][str(stage)] = stage_data
+    data["history"].append({"event": f"stage-{stage}-completed", "timestamp": _now()})
     _save(output_dir, data)

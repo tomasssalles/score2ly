@@ -3,6 +3,7 @@ import logging
 import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import IntEnum, auto
 from typing import Protocol
 from pathlib import Path
 
@@ -12,10 +13,20 @@ from pdf2image import convert_from_path
 
 from score2ly import audiveris, image_processing, lilypond, metadata, musicxml2ly, omr_layout, pdf
 from score2ly.settings import ConvertSettings
-from score2ly.stages import Stage
 from score2ly.utils import relative
 
 logger = logging.getLogger(__name__)
+
+
+class Stage(IntEnum):
+    ORIGINAL   = 1
+    PREPROCESS = auto()
+    OMR        = auto()
+    MUSICXML   = auto()
+    LAYOUT     = auto()
+    IMAGES     = auto()
+    LILYPOND   = auto()
+    RENDER     = auto()
 
 
 def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
@@ -260,7 +271,7 @@ def _omr(
     outputs = []
     for i, page_path in enumerate(page_paths):
         logger.info("Stage %d: Processing page %d/%d...", Stage.OMR, i + 1, len(page_paths))
-        omr_path = audiveris.run_omr(page_path, stage_output_dir)
+        omr_path = audiveris.run_omr(page_path, stage_output_dir, Stage.OMR)
         outputs.append(omr_path)
 
     return outputs
@@ -280,7 +291,7 @@ def _export_musicxml(
     outputs = []
     for i, omr_path in enumerate(omr_paths):
         logger.info("Stage %d: Processing page %d/%d...", Stage.MUSICXML, i + 1, len(omr_paths))
-        xml_path = audiveris.export_xml(omr_path, stage_output_dir)
+        xml_path = audiveris.export_xml(omr_path, stage_output_dir, Stage.MUSICXML)
         outputs.append(xml_path)
 
     return outputs
@@ -301,7 +312,7 @@ def _stage_extract_layout(output_dir: Path) -> None:
     source = output_dir / stage_omr["output"]
 
     dest = output_dir / f"{int(Stage.LAYOUT):02d}.omr_layout.json"
-    layout = omr_layout.extract(source)
+    layout = omr_layout.extract(source, Stage.LAYOUT)
     dest.write_text(json.dumps(layout, indent=2))
 
     metadata.update_stage(output_dir, Stage.LAYOUT, {
@@ -381,7 +392,7 @@ def _stage_musicxml2ly(output_dir: Path) -> None:
     source = output_dir / stage_musicxml["output"]
 
     dest = output_dir / f"{int(Stage.LILYPOND):02d}.lilypond.ly"
-    musicxml2ly.run(source, dest)
+    musicxml2ly.run(source, dest, Stage.LILYPOND)
 
     metadata.update_stage(output_dir, Stage.LILYPOND, {
         "description": "Convert MusicXML to LilyPond via musicxml2ly",
@@ -403,7 +414,7 @@ def _stage_render(output_dir: Path) -> None:
     source = output_dir / stage_lilypond["output"]
 
     dest = output_dir / f"{int(Stage.RENDER):02d}.rendered.pdf"
-    lilypond.render(source, dest)
+    lilypond.render(source, dest, Stage.RENDER)
 
     metadata.update_stage(output_dir, Stage.RENDER, {
         "description": "Render LilyPond score to PDF",

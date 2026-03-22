@@ -4,8 +4,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from score2ly.stages import Stage
-
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "AUDIVERIS_PATH"
@@ -38,7 +36,7 @@ def find_executable() -> Path:
     )
 
 
-def _run_audiveris(extra_args: list[str], work_dir: Path, stage: Stage, identifier: str) -> None:
+def _run_audiveris(extra_args: list[str], work_dir: Path, stage: int, identifier: str) -> None:
     exe = find_executable()
     work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,10 +50,9 @@ def _run_audiveris(extra_args: list[str], work_dir: Path, stage: Stage, identifi
         raise RuntimeError(f"Audiveris {identifier} failed (exit code {result.returncode}). {log_hint}")
 
 
-
-def run_omr(input_path: Path, work_dir: Path) -> Path:
-    logger.info("Stage %d: Running Audiveris OMR on %s...", Stage.OMR, input_path.name)
-    _run_audiveris(["-transcribe", "-save", str(input_path)], work_dir, Stage.OMR, "OMR transcription")
+def run_omr(input_path: Path, work_dir: Path, stage: int) -> Path:
+    logger.info("Stage %d: Running Audiveris OMR on %s...", stage, input_path.name)
+    _run_audiveris(["-transcribe", "-save", str(input_path)], work_dir, stage, "OMR transcription")
 
     expected = work_dir / f"{input_path.stem}.omr"
     if not expected.exists():
@@ -63,16 +60,16 @@ def run_omr(input_path: Path, work_dir: Path) -> Path:
     return expected
 
 
-def export_xml(omr_path: Path, work_dir: Path) -> Path:
+def export_xml(omr_path: Path, work_dir: Path, stage: int) -> Path:
     # Audiveris ignores -output for existing .omr books and writes the export next
     # to the input file. Symlink the .omr into work_dir so output lands there.
     omr_link = work_dir / omr_path.name
     work_dir.mkdir(parents=True, exist_ok=True)
     omr_link.symlink_to(omr_path.relative_to(omr_link.parent, walk_up=True))
 
-    logger.info("Stage %d: Exporting MusicXML from %s...", Stage.MUSICXML, omr_path.name)
+    logger.info("Stage %d: Exporting MusicXML from %s...", stage, omr_path.name)
     extra_args = ["-export", "-constant", "org.audiveris.omr.sheet.BookManager.useCompression=false", str(omr_link)]
-    _run_audiveris(extra_args, work_dir, Stage.MUSICXML, "MusicXML export")
+    _run_audiveris(extra_args, work_dir, stage, "MusicXML export")
 
     expected = omr_link.with_suffix(".xml")
     if not expected.exists():

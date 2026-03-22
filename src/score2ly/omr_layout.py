@@ -3,18 +3,16 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from score2ly.stages import Stage
-
 logger = logging.getLogger(__name__)
 
 _TESTED_MAJOR_VERSION = 5
 _INTERLINE_PADDING_FACTOR = 4.5
 
 
-def extract(omr_path: Path) -> dict:
+def extract(omr_path: Path, stage: int) -> dict:
     with zipfile.ZipFile(omr_path) as z:
         book = ElementTree.fromstring(z.read("book.xml"))
-        _check_version(book)
+        _check_version(book, stage)
 
         sheets_out = []
         global_measure_offset = 0
@@ -31,7 +29,7 @@ def extract(omr_path: Path) -> dict:
             page_width = int(picture.attrib["width"])
             page_height = int(picture.attrib["height"])
 
-            interline = _parse_interline(sheet_xml)
+            interline = _parse_interline(sheet_xml, stage)
             padding = round(interline * _INTERLINE_PADDING_FACTOR)
 
             systems_out = []
@@ -43,7 +41,7 @@ def extract(omr_path: Path) -> dict:
                 part = sys_el.find("part")
                 staves = part.findall("staff") if part is not None else []
 
-                glyph_bounds = _collect_glyph_bounds(sys_el)
+                glyph_bounds = _collect_glyph_bounds(sys_el, stage)
                 staff_extent = _staff_line_extent(staves)
                 sys_bounds = _system_bounds(staff_extent, glyph_bounds, padding, page_height)
 
@@ -82,33 +80,33 @@ def extract(omr_path: Path) -> dict:
     return {"sheets": sheets_out}
 
 
-def _check_version(book: ElementTree.Element) -> None:
+def _check_version(book: ElementTree.Element, stage: int) -> None:
     version = book.attrib.get("software-version", "")
     try:
         major = int(version.split(".")[0])
     except (ValueError, IndexError):
-        logger.warning("Stage %d: Could not parse Audiveris version %r; proceeding anyway.", Stage.LAYOUT, version)
+        logger.warning("Stage %d: Could not parse Audiveris version %r; proceeding anyway.", stage, version)
         return
     if major != _TESTED_MAJOR_VERSION:
         logger.warning(
             "Stage %d: This code was tested with Audiveris 5.*; Detected version %s. "
             "Results may be incorrect.",
-            Stage.LAYOUT, version,
+            stage, version,
         )
 
 
-def _parse_interline(sheet_xml: ElementTree.Element) -> float:
+def _parse_interline(sheet_xml: ElementTree.Element, stage: int) -> float:
     try:
         interline_el = sheet_xml.find("scale/interline")
         if interline_el is not None:
             return float(interline_el.attrib["main"])
     except (KeyError, ValueError):
         pass
-    logger.debug("Stage %d: Could not read interline from scale; Using fallback value.", Stage.LAYOUT)
+    logger.debug("Stage %d: Could not read interline from scale; Using fallback value.", stage)
     return 20.0
 
 
-def _collect_glyph_bounds(sys_el: ElementTree.Element) -> list[tuple[int, int, int, int]]:
+def _collect_glyph_bounds(sys_el: ElementTree.Element, stage: int) -> list[tuple[int, int, int, int]]:
     """Return (x, y, w, h) for every symbol in the system that has a bounds element."""
     result = []
     try:
@@ -132,7 +130,7 @@ def _collect_glyph_bounds(sys_el: ElementTree.Element) -> list[tuple[int, int, i
             except (KeyError, ValueError):
                 pass
     except Exception:
-        logger.debug("Stage %d: Failed to collect glyph bounds; Falling back to staff-line bounds only.", Stage.LAYOUT)
+        logger.debug("Stage %d: Failed to collect glyph bounds; Falling back to staff-line bounds only.", stage)
     return result
 
 

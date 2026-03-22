@@ -4,8 +4,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from score2ly.stages import Stage
-
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "LILYPOND_PATH"
@@ -33,15 +31,15 @@ def find_executable() -> Path:
     )
 
 
-def render(input_ly: Path, output_pdf: Path) -> None:
+def render(input_ly: Path, output_pdf: Path, stage: int) -> None:
     exe = find_executable()
 
     # LilyPond appends .pdf to the output prefix, so strip it
     output_prefix = output_pdf.with_suffix("")
 
     cmd = [str(exe), "-o", str(output_prefix), str(input_ly)]
-    logger.info("Stage %d: Rendering LilyPond to PDF...", Stage.RENDER)
-    logger.debug("Stage %d: Command: %s", Stage.RENDER, " ".join(cmd))
+    logger.info("Stage %d: Rendering LilyPond to PDF...", stage)
+    logger.debug("Stage %d: Command: %s", stage, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
