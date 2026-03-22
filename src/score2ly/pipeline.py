@@ -9,6 +9,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 from pdf2image import convert_from_path
+from PIL import Image
 
 from score2ly import audiveris, image_processing, lilypond, metadata, musicxml2ly, omr_layout, pdf
 from score2ly.settings import ConvertSettings
@@ -56,6 +57,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="layout",
             dependencies=(Stage.OMR,),
             fn=_extract_layout,
+        ),
+        _StageParams(
+            stage=Stage.IMAGES,
+            description="Crop system and measure images from preprocessed page PNGs",
+            output_dir_name="images",
+            dependencies=(Stage.PREPROCESS, Stage.LAYOUT),
+            fn=_crop_images,
         ),
     )
 
@@ -329,64 +337,45 @@ def _extract_layout(
     return (dest,)
 
 
-# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
+def _crop_images(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Sequence[Path]:
+    pipeline_output_dir = stage_output_dir.parent
 
+    layout_path = pipeline_output_dir / dependencies_to_outputs[Stage.LAYOUT][0]
+    layout = json.loads(layout_path.read_text())
 
-def _stage_crop(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, Stage.IMAGES)
-    if existing is not None:
-        checksums = existing.get("checksums", {})
-        if checksums and all(
-            (output_dir / p).exists() and metadata.checksum(output_dir / p) == c
-            for p, c in checksums.items()
-        ):
-            logger.info("Stage %d: already complete, skipping.", Stage.IMAGES)
-            return
+    page_pngs = sorted(dependencies_to_outputs[Stage.PREPROCESS])
 
-    stage_preprocess = metadata.get_stage(output_dir, Stage.PREPROCESS)
-    pdf_path = output_dir / stage_preprocess["output"]
+    systems_dir = stage_output_dir / "systems"
+    measures_dir = stage_output_dir / "measures"
+    systems_dir.mkdir()
+    measures_dir.mkdir()
 
-    stage_layout = metadata.get_stage(output_dir, Stage.LAYOUT)
-    layout = json.loads((output_dir / stage_layout["output"]).read_text())
-
-    images_dir = output_dir / f"{int(Stage.IMAGES):02d}.images"
-    pages_dir = images_dir / "pages"
-    systems_dir = images_dir / "systems"
-    measures_dir = images_dir / "measures"
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    systems_dir.mkdir(parents=True, exist_ok=True)
-    measures_dir.mkdir(parents=True, exist_ok=True)
-
-    checksums = {}
-    global_system_id = 0
-
+    outputs = []
     for sheet in layout["sheets"]:
         sheet_num = sheet["sheet"]
-        page_w, page_h = sheet["width"], sheet["height"]
-        logger.info("Stage %d: rasterizing page %d...", Stage.IMAGES, sheet_num)
-        page_img = convert_from_path(pdf_path, size=(page_w, page_h), first_page=sheet_num, last_page=sheet_num)[0]
-
-        page_path = pages_dir / f"page_{sheet_num:04d}.png"
-        page_img.save(page_path)
-        checksums[str(relative(page_path, output_dir))] = metadata.checksum(page_path)
+        page_img = Image.open(pipeline_output_dir / page_pngs[sheet_num - 1])
+        logger.info("Stage %d: Processing page %d/%d...", stage_idx, sheet_num, len(layout["sheets"]))
 
         for system in sheet["systems"]:
-            global_system_id += 1
-            sys_path = systems_dir / f"system_{global_system_id:04d}.png"
+            sys_path = systems_dir / f"system_{system['global_id']:04d}.png"
             image_processing.crop_and_save(page_img, system["bounds"], sys_path)
-            checksums[str(relative(sys_path, output_dir))] = metadata.checksum(sys_path)
+            outputs.append(sys_path)
 
             for measure in system["measures"]:
                 meas_path = measures_dir / f"measure_{measure['global_id']:04d}.png"
                 image_processing.crop_and_save(page_img, measure["bounds"], meas_path)
-                checksums[str(relative(meas_path, output_dir))] = metadata.checksum(meas_path)
+                outputs.append(meas_path)
 
-    metadata.update_stage(output_dir, Stage.IMAGES, {
-        "description": "Rasterize pages and crop system and measure images from preprocessed PDF",
-        "output": str(relative(images_dir, output_dir)),
-        "checksums": checksums,
-    })
-    logger.info("Stage %d: Done.", Stage.IMAGES)
+    return outputs
+
+
+# -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
 
 
 def _stage_musicxml2ly(output_dir: Path) -> None:
