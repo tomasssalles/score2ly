@@ -50,6 +50,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             dependencies=(Stage.OMR,),
             fn=_export_musicxml,
         ),
+        _StageParams(
+            stage=Stage.LAYOUT,
+            description="Extract system and measure layout from Audiveris .omr projects",
+            output_dir_name="layout",
+            dependencies=(Stage.OMR,),
+            fn=_extract_layout,
+        ),
     )
 
     for stage_idx, params in enumerate(stages, start=1):
@@ -292,30 +299,30 @@ def _export_musicxml(
     return outputs
 
 
+def _extract_layout(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Sequence[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    omr_paths = sorted(
+        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.OMR]
+    )
+
+    combined_sheets = []
+    measure_offset = 0
+    for omr_path in omr_paths:
+        result, measure_offset = omr_layout.extract(omr_path, stage_idx, initial_measure_offset=measure_offset)
+        combined_sheets.extend(result["sheets"])
+
+    dest = stage_output_dir / "layout.json"
+    dest.write_text(json.dumps({"sheets": combined_sheets}, indent=2))
+    return (dest,)
+
+
 # -- LEGACY STAGE IMPLEMENTATIONS -- NOT IN USE -- TO BE REPLACED --
-
-
-def _stage_extract_layout(output_dir: Path) -> None:
-    existing = metadata.get_stage(output_dir, Stage.LAYOUT)
-    if existing is not None:
-        dest_existing = output_dir / existing["output"]
-        if dest_existing.exists() and metadata.checksum(dest_existing) == existing["checksum"]:
-            logger.info("Stage %d: already complete, skipping.", Stage.LAYOUT)
-            return
-
-    stage_omr = metadata.get_stage(output_dir, Stage.OMR)
-    source = output_dir / stage_omr["output"]
-
-    dest = output_dir / f"{int(Stage.LAYOUT):02d}.omr_layout.json"
-    layout = omr_layout.extract(source, Stage.LAYOUT)
-    dest.write_text(json.dumps(layout, indent=2))
-
-    metadata.update_stage(output_dir, Stage.LAYOUT, {
-        "description": "Extract system and measure layout from Audiveris .omr project",
-        "output": str(relative(dest, output_dir)),
-        "checksum": metadata.checksum(dest),
-    })
-    logger.info("Stage %d: Done.", Stage.LAYOUT)
 
 
 def _stage_crop(output_dir: Path) -> None:

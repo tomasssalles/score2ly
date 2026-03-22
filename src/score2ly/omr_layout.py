@@ -9,13 +9,13 @@ _TESTED_MAJOR_VERSION = 5
 _INTERLINE_PADDING_FACTOR = 4.5
 
 
-def extract(omr_path: Path, stage: int) -> dict:
+def extract(omr_path: Path, stage: int, initial_measure_offset: int = 0) -> tuple[dict, int]:
     with zipfile.ZipFile(omr_path) as z:
         book = ElementTree.fromstring(z.read("book.xml"))
         _check_version(book, stage)
 
         sheets_out = []
-        global_measure_offset = 0
+        global_measure_offset = initial_measure_offset
 
         for sheet_el in book.findall("sheet"):
             sheet_num = int(sheet_el.attrib["number"])
@@ -77,7 +77,7 @@ def extract(omr_path: Path, stage: int) -> dict:
 
             global_measure_offset += delta
 
-    return {"sheets": sheets_out}
+    return {"sheets": sheets_out}, global_measure_offset
 
 
 def _check_version(book: ElementTree.Element, stage: int) -> None:
