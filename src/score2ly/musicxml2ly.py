@@ -38,8 +38,8 @@ def run(input_xml: Path, output_ly: Path) -> None:
     exe = find_executable()
 
     cmd = [str(exe), str(input_xml), "-o", str(output_ly)]
-    logger.info("Stage %d: converting MusicXML to LilyPond...", Stage.LILYPOND)
-    logger.debug("Stage %d: command: %s", Stage.LILYPOND, " ".join(cmd))
+    logger.info("Stage %d: Converting MusicXML to LilyPond...", Stage.LILYPOND)
+    logger.debug("Stage %d: Command: %s", Stage.LILYPOND, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:

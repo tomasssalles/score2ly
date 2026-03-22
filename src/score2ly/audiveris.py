@@ -43,7 +43,7 @@ def _run_audiveris(extra_args: list[str], work_dir: Path, stage: Stage, identifi
     work_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [str(exe), "-batch", "-output", str(work_dir), *extra_args]
-    logger.debug("Stage %d: command: %s", stage, " ".join(cmd))
+    logger.debug("Stage %d: Command: %s", stage, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -54,7 +54,7 @@ def _run_audiveris(extra_args: list[str], work_dir: Path, stage: Stage, identifi
 
 
 def run_omr(input_path: Path, work_dir: Path) -> Path:
-    logger.info("Stage %d: running Audiveris OMR on %s...", Stage.OMR, input_path.name)
+    logger.info("Stage %d: Running Audiveris OMR on %s...", Stage.OMR, input_path.name)
     _run_audiveris(["-transcribe", "-save", str(input_path)], work_dir, Stage.OMR, "OMR transcription")
 
     expected = work_dir / f"{input_path.stem}.omr"

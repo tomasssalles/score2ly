@@ -40,8 +40,8 @@ def render(input_ly: Path, output_pdf: Path) -> None:
     output_prefix = output_pdf.with_suffix("")
 
     cmd = [str(exe), "-o", str(output_prefix), str(input_ly)]
-    logger.info("Stage %d: rendering LilyPond to PDF...", Stage.RENDER)
-    logger.debug("Stage %d: command: %s", Stage.RENDER, " ".join(cmd))
+    logger.info("Stage %d: Rendering LilyPond to PDF...", Stage.RENDER)
+    logger.debug("Stage %d: Command: %s", Stage.RENDER, " ".join(cmd))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
