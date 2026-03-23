@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 _DESIRED_DPI = 300
 _AUDIVERIS_PIXEL_LIMIT = 20_000_000
-_AUDIVERIS_MIN_SUGGESTED_DPI = 200
 _PIXEL_TARGET_FACTOR = 0.85  # stay at 85% of the hard limit
 
 
@@ -17,14 +16,13 @@ def page_rasterization_dpi(width_pts: float, height_pts: float) -> int:
     width_in = width_pts / 72
     height_in = height_pts / 72
     limit_dpi = math.floor(math.sqrt(_AUDIVERIS_PIXEL_LIMIT * _PIXEL_TARGET_FACTOR / (width_in * height_in)))
-    dpi = min(_DESIRED_DPI, limit_dpi)
-    if dpi < _AUDIVERIS_MIN_SUGGESTED_DPI:
+    if limit_dpi > _DESIRED_DPI:
         logger.warning(
-            "Rasterization DPI (%d) is below Audiveris's recommended minimum of %d."
-            " OMR quality may be reduced.",
-            dpi, _AUDIVERIS_MIN_SUGGESTED_DPI,
+            "Page dimensions are unusually small (%.2f x %.2f in)."
+            " Rasterizing at %d DPI may yield too few pixels for reliable OMR.",
+            width_in, height_in, _DESIRED_DPI,
         )
-    return dpi
+    return min(_DESIRED_DPI, limit_dpi)
 
 
 def is_vector(pdf_path: Path) -> bool:
