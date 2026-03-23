@@ -6,5 +6,6 @@ class Stage(Enum):
     PREPROCESS = "preprocess"
     OMR        = "omr"
     MUSICXML   = "musicxml"
+    CLEAN_XML  = "clean_xml"
     LAYOUT     = "layout"
     IMAGES     = "images"

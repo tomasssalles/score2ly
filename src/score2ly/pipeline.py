@@ -11,7 +11,7 @@ import numpy as np
 from pdf2image import convert_from_path
 from PIL import Image
 
-from score2ly import audiveris, image_processing, metadata, omr_layout, pdf
+from score2ly import audiveris, image_processing, metadata, musicxml_cleanup, omr_layout, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
@@ -50,6 +50,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="musicxml",
             dependencies=(Stage.OMR,),
             fn=_export_musicxml,
+        ),
+        _StageParams(
+            stage=Stage.CLEAN_XML,
+            description="Strip layout and style noise from MusicXML, keeping only musical content",
+            output_dir_name="musicxml_clean",
+            dependencies=(Stage.MUSICXML,),
+            fn=_clean_musicxml,
         ),
         _StageParams(
             stage=Stage.LAYOUT,
@@ -303,6 +310,28 @@ def _export_musicxml(
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(omr_paths))
         xml_path = audiveris.export_xml(omr_path, stage_output_dir, stage_idx)
         outputs.append(xml_path)
+
+    return outputs
+
+
+def _clean_musicxml(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Sequence[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    xml_paths = sorted(
+        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML]
+    )
+
+    outputs = []
+    for i, xml_path in enumerate(xml_paths):
+        logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(xml_paths))
+        dest = stage_output_dir / xml_path.with_suffix(".clean" + xml_path.suffix).name
+        musicxml_cleanup.clean(xml_path, dest)
+        outputs.append(dest)
 
     return outputs
 
