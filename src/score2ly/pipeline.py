@@ -258,8 +258,8 @@ def _preprocess(
 
 
 def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings, stage_idx: int) -> bool:
-    if not settings.preprocess_images or settings.preprocessing_is_noop():
-        logger.info("Stage %d: Heavy preprocessing disabled, skipping.", stage_idx)
+    if settings.preprocessing_is_noop():
+        logger.info("Stage %d: No preprocessing operations enabled, skipping.", stage_idx)
         return False
     if settings.pdf_kind == "vector":
         logger.info("Stage %d: Vector PDF, skipping heavy preprocessing.", stage_idx)

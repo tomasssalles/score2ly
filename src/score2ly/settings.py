@@ -14,7 +14,6 @@ from score2ly.image_processing import (
 class ConvertSettings:
     # PDF type
     pdf_kind: Literal["auto", "vector", "scan"] = "auto"
-    preprocess_images: bool = False
 
     # Image preprocessing (for scans)
     sheet_method: SheetMethod = DEFAULT_SHEET_METHOD
