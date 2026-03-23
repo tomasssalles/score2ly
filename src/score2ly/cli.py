@@ -44,6 +44,8 @@ def main() -> None:
     advanced = convert.add_argument_group("advanced")
     advanced.add_argument("--pdf-kind", choices=["auto", "scan", "vector"], default="auto",
                           help="Override PDF type detection (default: auto)")
+    advanced.add_argument("--on-omr-failure", choices=["abort", "skip-page", "ask"], default="abort",
+                          help="Action when OMR fails on a page: abort the pipeline, skip the page, or ask interactively (default: abort)")
     advanced.add_argument("--sheet-method", choices=[m.value for m in SheetMethod], default=DEFAULT_SHEET_METHOD.value,
                           help=f"Page isolation method (default: {DEFAULT_SHEET_METHOD.value})")
     advanced.add_argument("--block-method", choices=[m.value for m in BlockMethod], default=DEFAULT_BLOCK_METHOD.value,
@@ -113,6 +115,7 @@ def _convert(args: argparse.Namespace) -> None:
 
     settings = ConvertSettings(
         pdf_kind=args.pdf_kind,
+        on_omr_failure=args.on_omr_failure,
         sheet_method=SheetMethod(args.sheet_method),
         block_method=BlockMethod(args.block_method),
         deskew=args.deskew,

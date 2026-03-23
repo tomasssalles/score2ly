@@ -288,7 +288,44 @@ def _omr(
 
     for i, page_path in enumerate(page_paths):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(page_paths))
-        yield audiveris.run_omr(page_path, stage_output_dir, stage_idx)
+        try:
+            yield audiveris.run_omr(page_path, stage_output_dir, stage_idx)
+        except RuntimeError as e:
+            if not _should_skip_on_omr_failure(e, page_path, i + 1, len(page_paths), settings, stage_idx):
+                raise
+
+
+def _should_skip_on_omr_failure(
+    error: RuntimeError,
+    page_path: Path,
+    page_num: int,
+    page_count: int,
+    settings: ConvertSettings,
+    stage_idx: int,
+) -> bool:
+    """Handle an OMR failure. Returns True if the page should be skipped, False to re-raise."""
+    if settings.on_omr_failure == "skip-page":
+        logger.warning(
+            "Stage %d: OMR failed on page %d/%d, skipping because '--on-omr-failure=skip-page'. Error: %s",
+            stage_idx, page_num, page_count, error
+        )
+        return True
+    if settings.on_omr_failure == "ask":
+        print(f"\nStage {stage_idx}: OMR failed on page {page_num}/{page_count}.")
+        print(f"Preprocessed image: {page_path}")
+        print(f"Error: {error}")
+        while True:
+            answer = input("Skip this page and continue, or abort? [skip/abort] ").strip().lower()
+            if answer in ("skip", "s"):
+                logger.warning(
+                    "Stage %d: OMR failed on page %d/%d, skipping on user request. Error: %s",
+                    stage_idx, page_num, page_count, error
+                )
+                return True
+            if answer in ("abort", "a"):
+                return False
+            print("Please enter 'skip' or 'abort'.")
+    return False
 
 
 def _export_musicxml(
@@ -342,7 +379,8 @@ def _extract_layout(
     combined_sheets = []
     measure_offset = 0
     global_system_id = 0
-    for page_num, omr_path in enumerate(omr_paths, start=1):
+    for omr_path in omr_paths:
+        page_num = int(omr_path.stem.split("_")[1])
         result, measure_offset = omr_layout.extract(omr_path, stage_idx, initial_measure_offset=measure_offset)
         for sheet in result["sheets"]:
             sheet["sheet"] = page_num
