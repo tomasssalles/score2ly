@@ -11,6 +11,10 @@ _GLOBAL_ATTRS_TO_STRIP = _COORD_ATTRS | _STYLE_ATTRS
 
 # Element-specific attribute stripping
 _ACCIDENTAL_ATTRS_TO_STRIP = frozenset({"bracket", "size", "cautionary"})
+_SLUR_ATTRS_TO_STRIP = frozenset({"bezier-x", "bezier-y", "bezier-x2", "bezier-y2", "placement"})
+_PLACEMENT_ELEMENTS = frozenset({"direction", "staccato", "strong-accent", "accent", "tenuto",
+                                  "detached-legato", "stressed", "unstressed", "tuplet"})
+_STAFF_DETAILS_ATTRS_TO_STRIP = frozenset({"print-object"})
 
 # Top-level elements to remove entirely
 _TOPLEVEL_REMOVE = frozenset({"work", "identification", "defaults", "credit"})
@@ -50,6 +54,18 @@ def clean(input_path: Path, output_path: Path) -> None:
 
     for sound in root.iter("sound"):
         sound.attrib.pop("dynamics", None)
+
+    for slur in root.iter("slur"):
+        for attr in _SLUR_ATTRS_TO_STRIP:
+            slur.attrib.pop(attr, None)
+
+    for tag in _PLACEMENT_ELEMENTS:
+        for el in root.iter(tag):
+            el.attrib.pop("placement", None)
+
+    for staff_details in root.iter("staff-details"):
+        for attr in _STAFF_DETAILS_ATTRS_TO_STRIP:
+            staff_details.attrib.pop(attr, None)
 
     ElementTree.indent(root, space="  ")
     xml_body = ElementTree.tostring(root, encoding="unicode", xml_declaration=False)
