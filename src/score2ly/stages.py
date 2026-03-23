@@ -10,3 +10,4 @@ class Stage(Enum):
     LAYOUT        = "layout"
     IMAGES        = "images"
     XML_SNIPPETS  = "xml_snippets"
+    LY_SNIPPETS   = "ly_snippets"

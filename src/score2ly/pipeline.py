@@ -12,7 +12,16 @@ from pdf2image import convert_from_path
 from pypdf import PdfReader
 from PIL import Image
 
-from score2ly import audiveris, image_processing, metadata, musicxml_cleanup, musicxml_snippets, omr_layout, pdf
+from score2ly import (
+    audiveris,
+    image_processing,
+    metadata,
+    musicxml_cleanup,
+    musicxml_snippets,
+    musicxml2ly,
+    omr_layout,
+    pdf,
+)
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
@@ -79,6 +88,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="xml_snippets",
             dependencies=(Stage.CLEAN_XML, Stage.LAYOUT),
             fn=_extract_xml_snippets,
+        ),
+        _StageParams(
+            stage=Stage.LY_SNIPPETS,
+            description="Convert per-system MusicXML snippets to LilyPond via musicxml2ly",
+            output_dir_name="ly_snippets",
+            dependencies=(Stage.XML_SNIPPETS,),
+            fn=_convert_ly_snippets,
         ),
     )
 
@@ -471,3 +487,27 @@ def _extract_xml_snippets(
         yield from musicxml_snippets.extract_page_snippets(
             clean_xml_path, sheet["systems"], systems_dir, measures_dir
         )
+
+
+def _convert_ly_snippets(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Iterable[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    xml_paths = sorted(
+        pipeline_output_dir / p
+        for p in dependencies_to_outputs[Stage.XML_SNIPPETS]
+        if Path(p).parent.name == "systems"
+    )
+
+    systems_dir = stage_output_dir / "systems"
+    systems_dir.mkdir()
+
+    for i, xml_path in enumerate(xml_paths):
+        logger.info("Stage %d: Converting system %d/%d...", stage_idx, i + 1, len(xml_paths))
+        dest = systems_dir / xml_path.with_suffix(".ly").name
+        musicxml2ly.run(xml_path, dest, stage_idx)
+        yield dest
