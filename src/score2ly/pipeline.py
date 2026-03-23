@@ -12,7 +12,7 @@ from pdf2image import convert_from_path
 from pypdf import PdfReader
 from PIL import Image
 
-from score2ly import audiveris, image_processing, metadata, musicxml_cleanup, omr_layout, pdf
+from score2ly import audiveris, image_processing, metadata, musicxml_cleanup, musicxml_snippets, omr_layout, pdf
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
@@ -72,6 +72,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="images",
             dependencies=(Stage.PREPROCESS, Stage.LAYOUT),
             fn=_crop_images,
+        ),
+        _StageParams(
+            stage=Stage.XML_SNIPPETS,
+            description="Extract per-system and per-measure MusicXML snippets",
+            output_dir_name="xml_snippets",
+            dependencies=(Stage.CLEAN_XML, Stage.LAYOUT),
+            fn=_extract_xml_snippets,
         ),
     )
 
@@ -433,3 +440,34 @@ def _crop_images(
                 meas_path = measures_dir / f"measure_{measure['global_id']:04d}.png"
                 image_processing.crop_and_save(page_img, measure["bounds"], meas_path)
                 yield meas_path
+
+
+def _extract_xml_snippets(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Iterable[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+
+    layout_path = pipeline_output_dir / dependencies_to_outputs[Stage.LAYOUT][0]
+    layout = json.loads(layout_path.read_text())
+
+    clean_xml_by_page = {
+        int(p.stem.split(".")[0].split("_")[1]): pipeline_output_dir / p
+        for p in dependencies_to_outputs[Stage.CLEAN_XML]
+    }
+
+    systems_dir = stage_output_dir / "systems"
+    measures_dir = stage_output_dir / "measures"
+    systems_dir.mkdir()
+    measures_dir.mkdir()
+
+    for sheet in layout["sheets"]:
+        page_num = sheet["sheet"]
+        logger.info("Stage %d: Processing page %d/%d...", stage_idx, page_num, len(layout["sheets"]))
+        clean_xml_path = clean_xml_by_page[page_num]
+        yield from musicxml_snippets.extract_page_snippets(
+            clean_xml_path, sheet["systems"], systems_dir, measures_dir
+        )
