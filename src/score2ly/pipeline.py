@@ -1,7 +1,7 @@
 import json
 import logging
 import shutil
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -86,7 +86,7 @@ class _StageFn(Protocol):
         settings: ConvertSettings,
         dependencies_to_outputs: dict[Stage, Sequence[Path]],
         stage_idx: int,
-    ) -> Sequence[Path]: ...
+    ) -> Iterable[Path]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,13 +174,15 @@ def _run_stage(
         shutil.rmtree(stage_output_dir)
     stage_output_dir.mkdir(parents=True)
 
-    stage_outputs = params.fn(stage_output_dir, pipeline_input_path, settings, dependencies_to_outputs, stage_idx)
-
     source_checksums = {
         str(dep_out_rel_p): metadata.checksum(pipeline_output_dir / dep_out_rel_p)
         for dep_outputs in dependencies_to_outputs.values()
         for dep_out_rel_p in dep_outputs
     }
+
+    stage_outputs = tuple(
+        params.fn(stage_output_dir, pipeline_input_path, settings, dependencies_to_outputs, stage_idx)
+    )
 
     metadata.update_stage(pipeline_output_dir, params.stage, {
         "description": params.description,
@@ -196,7 +198,7 @@ def _copy_original(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     if pipeline_input_path is None:
         raise ValueError(
             f"Stage {stage_idx}: No input path provided and no valid copy of original score available."
@@ -209,7 +211,7 @@ def _copy_original(
         "Stage %d: Copied the original score %s into the .s2l bundle (%s)", stage_idx, pipeline_input_path, dest
     )
 
-    return (dest,)
+    yield dest
 
 
 def _preprocess(
@@ -218,7 +220,7 @@ def _preprocess(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
     source = pipeline_output_dir / dependencies_to_outputs[Stage.ORIGINAL][0]
 
@@ -228,7 +230,6 @@ def _preprocess(
     images = convert_from_path(source, dpi=300)
     logger.info("Stage %d: Rasterized %d page(s).", stage_idx, len(images))
 
-    outputs = []
     for i, image in enumerate(images):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(images))
         gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
@@ -250,9 +251,7 @@ def _preprocess(
 
         page_path = stage_output_dir / f"page_{i + 1:04d}.png"
         cv2.imwrite(str(page_path), gray)
-        outputs.append(page_path)
-
-    return outputs
+        yield page_path
 
 
 def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings, stage_idx: int) -> bool:
@@ -278,19 +277,15 @@ def _omr(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
     page_paths = sorted(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.PREPROCESS]
     )
 
-    outputs = []
     for i, page_path in enumerate(page_paths):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(page_paths))
-        omr_path = audiveris.run_omr(page_path, stage_output_dir, stage_idx)
-        outputs.append(omr_path)
-
-    return outputs
+        yield audiveris.run_omr(page_path, stage_output_dir, stage_idx)
 
 
 def _export_musicxml(
@@ -299,19 +294,15 @@ def _export_musicxml(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
     omr_paths = sorted(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.OMR]
     )
 
-    outputs = []
     for i, omr_path in enumerate(omr_paths):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(omr_paths))
-        xml_path = audiveris.export_xml(omr_path, stage_output_dir, stage_idx)
-        outputs.append(xml_path)
-
-    return outputs
+        yield audiveris.export_xml(omr_path, stage_output_dir, stage_idx)
 
 
 def _clean_musicxml(
@@ -320,20 +311,17 @@ def _clean_musicxml(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
     xml_paths = sorted(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML]
     )
 
-    outputs = []
     for i, xml_path in enumerate(xml_paths):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(xml_paths))
         dest = stage_output_dir / xml_path.with_suffix(".clean" + xml_path.suffix).name
         musicxml_cleanup.clean(xml_path, dest)
-        outputs.append(dest)
-
-    return outputs
+        yield dest
 
 
 def _extract_layout(
@@ -342,7 +330,7 @@ def _extract_layout(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
     omr_paths = sorted(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.OMR]
@@ -363,7 +351,7 @@ def _extract_layout(
 
     dest = stage_output_dir / "layout.json"
     dest.write_text(json.dumps({"sheets": combined_sheets}, indent=2))
-    return (dest,)
+    yield dest
 
 
 def _crop_images(
@@ -372,7 +360,7 @@ def _crop_images(
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
-) -> Sequence[Path]:
+) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
 
     layout_path = pipeline_output_dir / dependencies_to_outputs[Stage.LAYOUT][0]
@@ -385,7 +373,6 @@ def _crop_images(
     systems_dir.mkdir()
     measures_dir.mkdir()
 
-    outputs = []
     for sheet in layout["sheets"]:
         sheet_num = sheet["sheet"]
         page_img = Image.open(pipeline_output_dir / page_pngs[sheet_num - 1])
@@ -394,11 +381,9 @@ def _crop_images(
         for system in sheet["systems"]:
             sys_path = systems_dir / f"system_{system['global_id']:04d}.png"
             image_processing.crop_and_save(page_img, system["bounds"], sys_path)
-            outputs.append(sys_path)
+            yield sys_path
 
             for measure in system["measures"]:
                 meas_path = measures_dir / f"measure_{measure['global_id']:04d}.png"
                 image_processing.crop_and_save(page_img, measure["bounds"], meas_path)
-                outputs.append(meas_path)
-
-    return outputs
+                yield meas_path
