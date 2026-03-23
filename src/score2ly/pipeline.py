@@ -9,6 +9,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 from pdf2image import convert_from_path
+from pypdf import PdfReader
 from PIL import Image
 
 from score2ly import audiveris, image_processing, metadata, musicxml_cleanup, omr_layout, pdf
@@ -226,12 +227,14 @@ def _preprocess(
 
     run_heavy = _should_run_heavy_preprocessing(source, settings, stage_idx)
 
-    logger.info("Stage %d: Rasterizing pages at 300 DPI...", stage_idx)
-    images = convert_from_path(source, dpi=300)
-    logger.info("Stage %d: Rasterized %d page(s).", stage_idx, len(images))
+    pdf_pages = PdfReader(source).pages
+    page_count = len(pdf_pages)
+    logger.info("Stage %d: Rasterizing %d page(s)...", stage_idx, page_count)
 
-    for i, image in enumerate(images):
-        logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(images))
+    for i, pdf_page in enumerate(pdf_pages):
+        dpi = pdf.page_rasterization_dpi(float(pdf_page.mediabox.width), float(pdf_page.mediabox.height))
+        logger.info("Stage %d: Processing page %d/%d at %d DPI...", stage_idx, i + 1, page_count, dpi)
+        image = convert_from_path(source, dpi=dpi, first_page=i + 1, last_page=i + 1)[0]
         gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
 
         if run_heavy:
