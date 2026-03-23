@@ -361,10 +361,11 @@ def _clean_musicxml(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML]
     )
 
+    first_measure = 1
     for i, xml_path in enumerate(xml_paths):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(xml_paths))
         dest = stage_output_dir / xml_path.with_suffix(".clean" + xml_path.suffix).name
-        musicxml_cleanup.clean(xml_path, dest)
+        first_measure = musicxml_cleanup.clean(xml_path, dest, first_measure=first_measure)
         yield dest
 
 

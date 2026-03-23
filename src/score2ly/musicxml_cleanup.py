@@ -23,7 +23,11 @@ _TOPLEVEL_REMOVE = frozenset({"work", "identification", "defaults", "credit"})
 _SCORE_PART_REMOVE = frozenset({"score-instrument", "midi-instrument", "midi-device"})
 
 
-def clean(input_path: Path, output_path: Path) -> None:
+def clean(input_path: Path, output_path: Path, first_measure: int = 1) -> int:
+    """Clean the MusicXML file and renumber measures starting from first_measure.
+
+    Returns the first measure number for the next page.
+    """
     raw = input_path.read_text(encoding="utf-8")
     doctype = _extract_doctype(raw)
 
@@ -37,10 +41,13 @@ def clean(input_path: Path, output_path: Path) -> None:
     for score_part in root.findall("part-list/score-part"):
         _remove_children(score_part, _SCORE_PART_REMOVE)
 
-    # Remove <print> blocks from every measure
+    # Remove <print> blocks from every measure and apply global numbering
+    measure_count = 0
     for measure in root.iter("measure"):
+        measure.set("number", str(first_measure + measure_count))
         measure.attrib.pop("width", None)
         _remove_children(measure, {"print"})
+        measure_count += 1
 
     # Strip coordinate and style attributes from all elements
     for el in root.iter():
@@ -75,6 +82,7 @@ def clean(input_path: Path, output_path: Path) -> None:
         parts.append(doctype)
     parts.append(xml_body)
     output_path.write_text("\n".join(parts), encoding="utf-8")
+    return first_measure + measure_count
 
 
 def _remove_children(parent: ElementTree.Element, tags: Collection[str]) -> None:
