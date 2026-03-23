@@ -311,9 +311,13 @@ def _should_skip_on_omr_failure(
         )
         return True
     if settings.on_omr_failure == "ask":
-        print(f"\nStage {stage_idx}: OMR failed on page {page_num}/{page_count}.")
-        print(f"Preprocessed image: {page_path}")
-        print(f"Error: {error}")
+        print(
+            f"\n"
+            f"Stage {stage_idx}: OMR failed on page {page_num}/{page_count}.\n"
+            f"Preprocessed image: {page_path}\n"
+            f"Error: {error}\n"
+            f""
+        )
         while True:
             answer = input("Skip this page and continue, or abort? [skip/abort] ").strip().lower()
             if answer in ("skip", "s"):
