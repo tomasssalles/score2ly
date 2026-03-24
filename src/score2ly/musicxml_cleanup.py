@@ -1,3 +1,4 @@
+import copy
 import re
 from collections.abc import Collection
 from pathlib import Path
@@ -22,12 +23,22 @@ _TOPLEVEL_REMOVE = frozenset({"work", "identification", "defaults", "credit"})
 # Children of <score-part> to remove
 _SCORE_PART_REMOVE = frozenset({"score-instrument", "midi-instrument", "midi-device"})
 
+# Attributes carried forward from page to page when not reprinted
+_PAGE_CARRY_FORWARD_TAGS = frozenset({"time", "key"})
 
-def clean(input_path: Path, output_path: Path, first_measure: int = 1) -> int:
+
+def clean(
+    input_path: Path,
+    output_path: Path,
+    first_measure: int = 1,
+    carried_attrs: dict | None = None,
+) -> tuple[int, dict]:
     """Clean the MusicXML file and renumber measures starting from first_measure.
 
-    Returns the first measure number for the next page.
+    Returns (first_measure_for_next_page, carried_attrs_for_next_page).
     """
+    carried_attrs = carried_attrs or {}
+
     raw = input_path.read_text(encoding="utf-8")
     doctype = _extract_doctype(raw)
 
@@ -74,6 +85,19 @@ def clean(input_path: Path, output_path: Path, first_measure: int = 1) -> int:
         for attr in _STAFF_DETAILS_ATTRS_TO_STRIP:
             staff_details.attrib.pop(attr, None)
 
+    # Inject carried attributes into first measure if missing
+    first_measure_el = next(root.iter("measure"), None)
+    if first_measure_el is not None and carried_attrs:
+        _inject_missing_attrs(first_measure_el, carried_attrs)
+
+    # Collect time/key from this page to carry forward to the next
+    new_carried = dict(carried_attrs)
+    for measure in root.iter("measure"):
+        for attrs_el in measure.findall("attributes"):
+            for child in attrs_el:
+                if child.tag in _PAGE_CARRY_FORWARD_TAGS:
+                    new_carried[(child.tag, child.attrib.get("number"))] = copy.deepcopy(child)
+
     ElementTree.indent(root, space="  ")
     xml_body = ElementTree.tostring(root, encoding="unicode", xml_declaration=False)
 
@@ -82,7 +106,27 @@ def clean(input_path: Path, output_path: Path, first_measure: int = 1) -> int:
         parts.append(doctype)
     parts.append(xml_body)
     output_path.write_text("\n".join(parts), encoding="utf-8")
-    return first_measure + measure_count
+    return first_measure + measure_count, new_carried
+
+
+def _inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:
+    attrs_el = measure.find("attributes")
+    if attrs_el is None:
+        attrs_el = ElementTree.Element("attributes")
+        measure.insert(0, attrs_el)
+
+    div_idx = next((i for i, c in enumerate(attrs_el) if c.tag == "divisions"), -1)
+    insert_pos = div_idx + 1 if div_idx >= 0 else 0
+
+    injected = 0
+    for (tag, number), element in carried.items():
+        already = any(
+            c.tag == tag and c.attrib.get("number") == number
+            for c in attrs_el
+        )
+        if not already:
+            attrs_el.insert(insert_pos + injected, copy.deepcopy(element))
+            injected += 1
 
 
 def _remove_children(parent: ElementTree.Element, tags: Collection[str]) -> None:

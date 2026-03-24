@@ -385,10 +385,13 @@ def _clean_musicxml(
     )
 
     first_measure = 1
+    carried_attrs: dict = {}
     for i, xml_path in enumerate(xml_paths):
         logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(xml_paths))
         dest = stage_output_dir / xml_path.with_suffix(".clean" + xml_path.suffix).name
-        first_measure = musicxml_cleanup.clean(xml_path, dest, first_measure=first_measure)
+        first_measure, carried_attrs = musicxml_cleanup.clean(
+            xml_path, dest, first_measure=first_measure, carried_attrs=carried_attrs
+        )
         yield dest
 
 
