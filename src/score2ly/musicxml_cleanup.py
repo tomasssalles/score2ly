@@ -88,7 +88,7 @@ def clean(
     # Inject carried attributes into first measure if missing
     first_measure_el = next(root.iter("measure"), None)
     if first_measure_el is not None and carried_attrs:
-        _inject_missing_attrs(first_measure_el, carried_attrs)
+        inject_missing_attrs(first_measure_el, carried_attrs)
 
     # Collect time/key from this page to carry forward to the next
     new_carried = dict(carried_attrs)
@@ -109,7 +109,7 @@ def clean(
     return first_measure + measure_count, new_carried
 
 
-def _inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:
+def inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:
     attrs_el = measure.find("attributes")
     if attrs_el is None:
         attrs_el = ElementTree.Element("attributes")
