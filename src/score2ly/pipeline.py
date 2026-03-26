@@ -15,6 +15,7 @@ from PIL import Image
 from score2ly import (
     audiveris,
     image_processing,
+    ly_merge,
     metadata,
     musicxml_cleanup,
     musicxml_snippets,
@@ -95,6 +96,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="ly_snippets",
             dependencies=(Stage.XML_SNIPPETS,),
             fn=_convert_ly_snippets,
+        ),
+        _StageParams(
+            stage=Stage.LY_MERGE,
+            description="Merge per-system LilyPond snippets into a single score",
+            output_dir_name="ly_merge",
+            dependencies=(Stage.LY_SNIPPETS, Stage.XML_SNIPPETS),
+            fn=_merge_ly,
         ),
     )
 
@@ -490,6 +498,39 @@ def _extract_xml_snippets(
         yield from musicxml_snippets.extract_page_snippets(
             clean_xml_path, sheet["systems"], systems_dir, measures_dir
         )
+
+
+def _merge_ly(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Iterable[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    ly_paths = sorted(
+        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.LY_SNIPPETS]
+    )
+    xml_paths = sorted(
+        pipeline_output_dir / p
+        for p in dependencies_to_outputs[Stage.XML_SNIPPETS]
+        if Path(p).parent.name == "systems"
+    )
+
+    if len(ly_paths) != len(xml_paths):
+        raise RuntimeError(
+            f"Stage {stage_idx}: LY_SNIPPETS ({len(ly_paths)}) and XML_SNIPPETS ({len(xml_paths)}) "
+            f"system counts do not match. Cannot merge."
+        )
+    for ly, xml in zip(ly_paths, xml_paths):
+        if ly.stem != xml.stem:
+            raise RuntimeError(
+                f"Stage {stage_idx}: LY/XML snippet mismatch: {ly.name} vs {xml.name}."
+            )
+
+    dest = stage_output_dir / "score.ly"
+    ly_merge.merge_musicxml2ly(list(zip(ly_paths, xml_paths)), dest, stage_idx)
+    yield dest
 
 
 def _convert_ly_snippets(

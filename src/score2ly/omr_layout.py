@@ -5,14 +5,14 @@ from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
-_TESTED_MAJOR_VERSION = 5
+_TESTED_AUDIVERIS_MAJOR_VERSION = 5
 _INTERLINE_PADDING_FACTOR = 4.5
 
 
 def extract(omr_path: Path, stage: int, initial_measure_offset: int = 0) -> tuple[dict, int]:
     with zipfile.ZipFile(omr_path) as z:
         book = ElementTree.fromstring(z.read("book.xml"))
-        _check_version(book, stage)
+        _check_audiveris_version(book, stage)
 
         sheets_out = []
         global_measure_offset = initial_measure_offset
@@ -80,18 +80,24 @@ def extract(omr_path: Path, stage: int, initial_measure_offset: int = 0) -> tupl
     return {"sheets": sheets_out}, global_measure_offset
 
 
-def _check_version(book: ElementTree.Element, stage: int) -> None:
+def _check_audiveris_version(book: ElementTree.Element, stage: int) -> None:
     version = book.attrib.get("software-version", "")
+
     try:
         major = int(version.split(".")[0])
     except (ValueError, IndexError):
-        logger.warning("Stage %d: Could not parse Audiveris version %r; proceeding anyway.", stage, version)
-        return
-    if major != _TESTED_MAJOR_VERSION:
         logger.warning(
-            "Stage %d: This code was tested with Audiveris 5.*; Detected version %s. "
+            "Stage %d: This code was tested with Audiveris %d.*; Could not parse Audiveris version used here: %r. "
             "Results may be incorrect.",
-            stage, version,
+            stage, _TESTED_AUDIVERIS_MAJOR_VERSION, version,
+        )
+        return
+
+    if major != _TESTED_AUDIVERIS_MAJOR_VERSION:
+        logger.warning(
+            "Stage %d: This code was tested with Audiveris %d.*; Detected version %s. "
+            "Results may be incorrect.",
+            stage, _TESTED_AUDIVERIS_MAJOR_VERSION, version,
         )
 
 
