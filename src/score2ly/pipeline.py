@@ -15,6 +15,7 @@ from PIL import Image
 from score2ly import (
     audiveris,
     image_processing,
+    lilypond,
     ly_merge,
     metadata,
     musicxml_cleanup,
@@ -103,6 +104,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="ly_merge",
             dependencies=(Stage.LY_SNIPPETS, Stage.XML_SNIPPETS),
             fn=_merge_ly,
+        ),
+        _StageParams(
+            stage=Stage.LY_RENDER,
+            description="Render merged LilyPond score to PDF",
+            output_dir_name="ly_render",
+            dependencies=(Stage.LY_MERGE,),
+            fn=_render_ly,
         ),
     )
 
@@ -530,6 +538,21 @@ def _merge_ly(
 
     dest = stage_output_dir / "score.ly"
     ly_merge.merge_musicxml2ly(list(zip(ly_paths, xml_paths)), dest, stage_idx)
+    yield dest
+
+
+def _render_ly(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Iterable[Path]:
+    pipeline_output_dir = stage_output_dir.parent
+    score_ly_rel = dependencies_to_outputs[Stage.LY_MERGE][0]
+    score_ly = pipeline_output_dir / score_ly_rel
+    dest = stage_output_dir / "score.pdf"
+    lilypond.render(score_ly, dest, stage_idx)
     yield dest
 
 

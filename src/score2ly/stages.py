@@ -12,3 +12,4 @@ class Stage(Enum):
     XML_SNIPPETS  = "xml_snippets"
     LY_SNIPPETS   = "ly_snippets"
     LY_MERGE      = "ly_merge"
+    LY_RENDER     = "ly_render"
