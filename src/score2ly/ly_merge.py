@@ -218,6 +218,40 @@ def _merged_var_name(staff_idx: int, voice_idx: int) -> str:
     return f"Staff{staff_idx}Voice{voice_idx}"
 
 
+def _canonical_staff_directives(structures: Sequence[ScoreStructure]) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for structure in structures:
+        for staff in structure.staves:
+            if staff.id not in result or (not result[staff.id] and staff.directives):
+                result[staff.id] = staff.directives
+    return result
+
+
+def build_score_block(structures: Sequence[ScoreStructure], voice_map: VoiceMap) -> str:
+    first = structures[0]
+    group_type = first.group_type
+    instrument_name = first.instrument_name
+    staff_directives = _canonical_staff_directives(structures)
+
+    lines = ["\\score {", "    <<", f"        \\new {group_type}", "        <<"]
+
+    if instrument_name:
+        lines.append(f"            \\set {group_type}.instrumentName = \"{instrument_name}\"")
+        lines.append(f"            \\set {group_type}.shortInstrumentName = \"{instrument_name}\"")
+
+    for staff_idx, (staff_id, roles) in enumerate(voice_map.items(), start=1):
+        lines.append(f"            \\context Staff = \"{staff_id}\" <<")
+        for directive in staff_directives.get(staff_id, []):
+            lines.append(f"                {directive}")
+        for voice_idx, role in enumerate(roles.keys(), start=1):
+            merged_name = _merged_var_name(staff_idx, voice_idx)
+            lines.append(f"                \\context Voice = \"{merged_name}\" {{ \\{role} \\{merged_name} }}")
+        lines.append("            >>")
+
+    lines += ["        >>", "    >>", "    \\layout {}", "}"]
+    return "\n".join(lines)
+
+
 def build_merged_variables(voice_map: VoiceMap, system_spacers: list[str]) -> str:
     """Build merged variable definitions, one per (staff, voice) slot."""
     blocks = []
@@ -236,7 +270,7 @@ def build_merged_variables(voice_map: VoiceMap, system_spacers: list[str]) -> st
 
 
 def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path, stage: int) -> None:
-    logger.info("Stage %d: Merging %d LilyPond snippet(s) (dummy)...", stage, len(ly_xml_pairs))
+    logger.info("Stage %d: Merging %d LilyPond snippet(s)...", stage, len(ly_xml_pairs))
     ly_paths = [ly for ly, _ in ly_xml_pairs]
     xml_paths = [xml for _, xml in ly_xml_pairs]
     _check_musicxml2ly_version(ly_paths[0], stage)
@@ -251,4 +285,7 @@ def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path
     logger.debug("Stage %d: System spacers: %s", stage, system_spacers)
     merged_vars = build_merged_variables(voice_map, system_spacers)
     logger.debug("Stage %d: Merged variables:\n%s", stage, merged_vars)
-    output_ly.write_text(header + "\n\n% TODO: merge LilyPond snippets\n")
+
+    score_block = build_score_block(structures, voice_map)
+    all_renamed = "\n\n".join(renamed_vars)
+    output_ly.write_text(f"{header}\n\n{all_renamed}\n\n{merged_vars}\n\n{score_block}\n")
