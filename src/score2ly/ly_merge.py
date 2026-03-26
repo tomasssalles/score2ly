@@ -162,8 +162,12 @@ def _build_voice_map(structures: Sequence[ScoreStructure]) -> VoiceMap:
     return voice_map
 
 
+_DIGIT_NAMES = ("Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine")
+
+
 def _get_system_suffix(system_idx: int) -> str:
-    return f"_s{system_idx:04d}"
+    digits = "".join(_DIGIT_NAMES[int(d)] for d in str(system_idx))
+    return f"_s{digits}"
 
 
 def extract_renamed_variables(ly_file: Path, system_idx: int) -> str:
@@ -215,7 +219,9 @@ def compute_system_spacer(xml_file: Path) -> str:
 
 
 def _merged_var_name(staff_idx: int, voice_idx: int) -> str:
-    return f"Staff{staff_idx}Voice{voice_idx}"
+    staff = "".join(_DIGIT_NAMES[int(d)] for d in str(staff_idx))
+    voice = "".join(_DIGIT_NAMES[int(d)] for d in str(voice_idx))
+    return f"Staff{staff}Voice{voice}"
 
 
 def _canonical_staff_directives(structures: Sequence[ScoreStructure]) -> dict[str, list[str]]:
@@ -230,14 +236,9 @@ def _canonical_staff_directives(structures: Sequence[ScoreStructure]) -> dict[st
 def build_score_block(structures: Sequence[ScoreStructure], voice_map: VoiceMap) -> str:
     first = structures[0]
     group_type = first.group_type
-    instrument_name = first.instrument_name
     staff_directives = _canonical_staff_directives(structures)
 
     lines = ["\\score {", "    <<", f"        \\new {group_type}", "        <<"]
-
-    if instrument_name:
-        lines.append(f"            \\set {group_type}.instrumentName = \"{instrument_name}\"")
-        lines.append(f"            \\set {group_type}.shortInstrumentName = \"{instrument_name}\"")
 
     for staff_idx, (staff_id, roles) in enumerate(voice_map.items(), start=1):
         lines.append(f"            \\context Staff = \"{staff_id}\" <<")
