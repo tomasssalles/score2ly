@@ -214,6 +214,27 @@ def compute_system_spacer(xml_file: Path) -> str:
     return " | ".join(spacers)
 
 
+def _merged_var_name(staff_idx: int, voice_idx: int) -> str:
+    return f"Staff{staff_idx}Voice{voice_idx}"
+
+
+def build_merged_variables(voice_map: VoiceMap, system_spacers: list[str]) -> str:
+    """Build merged variable definitions, one per (staff, voice) slot."""
+    blocks = []
+    for staff_idx, (staff_id, roles) in enumerate(voice_map.items(), start=1):
+        for voice_idx, (role, var_names) in enumerate(roles.items(), start=1):
+            merged_name = _merged_var_name(staff_idx, voice_idx)
+            lines = [f"{merged_name} = {{"]
+            for i, var_name in enumerate(var_names):
+                if var_name is not None:
+                    lines.append(f"  \\{var_name}{_get_system_suffix(i + 1)}")
+                else:
+                    lines.append(f"  {system_spacers[i]}")
+            lines.append("}")
+            blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
 def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path, stage: int) -> None:
     logger.info("Stage %d: Merging %d LilyPond snippet(s) (dummy)...", stage, len(ly_xml_pairs))
     ly_paths = [ly for ly, _ in ly_xml_pairs]
@@ -228,4 +249,6 @@ def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path
     logger.debug("Stage %d: Renamed variables for system 1:\n%s", stage, renamed_vars[0])
     system_spacers = [compute_system_spacer(xml) for xml in xml_paths]
     logger.debug("Stage %d: System spacers: %s", stage, system_spacers)
+    merged_vars = build_merged_variables(voice_map, system_spacers)
+    logger.debug("Stage %d: Merged variables:\n%s", stage, merged_vars)
     output_ly.write_text(header + "\n\n% TODO: merge LilyPond snippets\n")
