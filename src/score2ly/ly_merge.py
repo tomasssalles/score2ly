@@ -3,6 +3,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,7 @@ def parse_score_block(ly_file: Path) -> ScoreStructure:
             group_type = m.group(1)
 
         if not instrument_name and (m := _INSTRUMENT_NAME.search(line)):
+            # noinspection PyUnresolvedReferences
             instrument_name = m.group(1)
 
         if m := _STAFF_CONTEXT.search(line):
@@ -190,9 +192,32 @@ def extract_renamed_variables(ly_file: Path, system_idx: int) -> str:
     return "".join(result).rstrip("\n")
 
 
+def compute_system_spacer(xml_file: Path) -> str:
+    """Return a LilyPond spacer rest string covering the full duration of a system.
+
+    Emits one s1*beats/beat-type token per measure, handling mid-system time signature changes.
+    """
+    part = ElementTree.parse(xml_file).getroot().find(".//part")
+    if part is None:
+        raise ValueError(f"No <part> element found in {xml_file}")
+
+    beats, beat_type = 4, 4  # fallback default; should always be overridden by the first measure
+    spacers = []
+
+    for measure in part.findall("measure"):
+        time_el = measure.find("attributes/time")
+        if time_el is not None:
+            beats = int(time_el.findtext("beats"))
+            beat_type = int(time_el.findtext("beat-type"))
+        spacers.append(f"s1*{beats}/{beat_type}")
+
+    return " | ".join(spacers)
+
+
 def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path, stage: int) -> None:
     logger.info("Stage %d: Merging %d LilyPond snippet(s) (dummy)...", stage, len(ly_xml_pairs))
     ly_paths = [ly for ly, _ in ly_xml_pairs]
+    xml_paths = [xml for _, xml in ly_xml_pairs]
     _check_musicxml2ly_version(ly_paths[0], stage)
     header = extract_header(ly_paths[0])
     structures = [parse_score_block(p) for p in ly_paths]
@@ -201,4 +226,6 @@ def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path
     renamed_vars = [extract_renamed_variables(ly, i + 1) for i, ly in enumerate(ly_paths)]
     logger.debug("Stage %d: Renamed variables collected for %d systems.", stage, len(renamed_vars))
     logger.debug("Stage %d: Renamed variables for system 1:\n%s", stage, renamed_vars[0])
+    system_spacers = [compute_system_spacer(xml) for xml in xml_paths]
+    logger.debug("Stage %d: System spacers: %s", stage, system_spacers)
     output_ly.write_text(header + "\n\n% TODO: merge LilyPond snippets\n")
