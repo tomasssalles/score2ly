@@ -75,7 +75,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             stage=Stage.CLEAN_XML,
             description="Strip layout and style noise from MusicXML, keeping only musical content",
             output_dir_name="musicxml_clean",
-            dependencies=(Stage.MUSICXML, Stage.SCORE_INFO),
+            dependencies=(Stage.MUSICXML,),
             fn=_clean_musicxml,
         ),
         _StageParams(
@@ -110,7 +110,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             stage=Stage.LY_MERGE,
             description="Merge per-system LilyPond snippets into a single score",
             output_dir_name="ly_merge",
-            dependencies=(Stage.LY_SNIPPETS, Stage.XML_SNIPPETS),
+            dependencies=(Stage.LY_SNIPPETS, Stage.XML_SNIPPETS, Stage.SCORE_INFO),
             fn=_merge_ly,
         ),
         _StageParams(
@@ -274,19 +274,21 @@ def _collect_score_info(
     first_xml = sorted(pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML])[0]
     extracted = score_info.extract_from_xml(first_xml)
     cli = score_info.ScoreInfo(
-        title=settings.title,
-        composer=settings.composer,
-        work_number=settings.work_number,
-        copyright=settings.copyright,
-        comment=settings.comment,
+        title=score_info.ScoreField(text=settings.title),
+        subtitle=score_info.ScoreField(text=settings.subtitle),
+        composer=score_info.ScoreField(text=settings.composer),
+        work_number=score_info.ScoreField(text=settings.work_number),
+        copyright=score_info.ScoreField(text=settings.copyright),
+        tagline=score_info.ScoreField(text=settings.tagline),
     )
     if settings.no_prompt:
         info = score_info.ScoreInfo(
-            title=cli.title or extracted.title,
-            composer=cli.composer or extracted.composer,
-            work_number=cli.work_number or extracted.work_number,
-            copyright=cli.copyright or extracted.copyright,
-            comment=cli.comment,
+            title=score_info.ScoreField(text=cli.title.text or extracted.title.text, confirmed=bool(cli.title.text)),
+            subtitle=score_info.ScoreField(text=cli.subtitle.text or extracted.subtitle.text, confirmed=bool(cli.subtitle.text)),
+            composer=score_info.ScoreField(text=cli.composer.text or extracted.composer.text, confirmed=bool(cli.composer.text)),
+            work_number=score_info.ScoreField(text=cli.work_number.text or extracted.work_number.text, confirmed=bool(cli.work_number.text)),
+            copyright=score_info.ScoreField(text=cli.copyright.text or extracted.copyright.text, confirmed=bool(cli.copyright.text)),
+            tagline=score_info.ScoreField(text=cli.tagline.text or extracted.tagline.text, confirmed=bool(cli.tagline.text)),
         )
     else:
         info = score_info.collect(cli, extracted)
@@ -440,8 +442,6 @@ def _clean_musicxml(
     xml_paths = sorted(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML]
     )
-    info_rel = dependencies_to_outputs[Stage.SCORE_INFO][0]
-    info = score_info.load(pipeline_output_dir / info_rel)
 
     first_measure = 1
     carried_attrs: dict = {}
@@ -451,8 +451,6 @@ def _clean_musicxml(
         first_measure, carried_attrs = musicxml_cleanup.clean(
             xml_path, dest, first_measure=first_measure, carried_attrs=carried_attrs
         )
-        if i == 0:
-            score_info.inject_into_xml(dest, info)
         yield dest
 
 
@@ -581,8 +579,11 @@ def _merge_ly(
                 f"Stage {stage_idx}: LY/XML snippet mismatch: {ly.name} vs {xml.name}."
             )
 
+    info = score_info.load(pipeline_output_dir / dependencies_to_outputs[Stage.SCORE_INFO][0])
+    ly_header = score_info.build_ly_header(info)
+
     dest = stage_output_dir / "score.ly"
-    ly_merge.merge_musicxml2ly(list(zip(ly_paths, xml_paths)), dest, stage_idx)
+    ly_merge.merge_musicxml2ly(list(zip(ly_paths, xml_paths)), dest, stage_idx, ly_header)
     yield dest
 
 

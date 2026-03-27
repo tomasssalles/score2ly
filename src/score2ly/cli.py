@@ -42,11 +42,12 @@ def main() -> None:
     convert.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
 
     score = convert.add_argument_group("score information")
-    score.add_argument("--title", default="", help="Score title")
-    score.add_argument("--composer", default="", help="Composer name")
-    score.add_argument("--work-number", default="", help="Work number (e.g. Op. 45, BWV 772, K. 331)")
-    score.add_argument("--copyright", default="", help="Copyright / license statement")
-    score.add_argument("--comment", default="", help="Comment shown as tagline")
+    score.add_argument("--title", default="", help="Score title (\"-\" to leave blank)")
+    score.add_argument("--subtitle", default="", help="Score subtitle (\"-\" to leave blank)")
+    score.add_argument("--composer", default="", help="Composer name (\"-\" to leave blank)")
+    score.add_argument("--work-number", default="", help="Work number (e.g. Op. 45, BWV 772, K. 331) (\"-\" to leave blank)")
+    score.add_argument("--copyright", default="", help="Copyright / license statement (\"-\" to leave blank)")
+    score.add_argument("--tagline", default="", help="Tagline shown at the bottom of the last page (\"-\" to leave blank)")
     score.add_argument("--no-prompt", action="store_true", help="Skip interactive score information prompts, using OMR-extracted values and any CLI args provided")
 
     advanced = convert.add_argument_group("advanced")
@@ -132,10 +133,11 @@ def _convert(args: argparse.Namespace) -> None:
         projection_k=args.projection_k,
         projection_denoise=args.projection_denoise,
         title=args.title,
+        subtitle=args.subtitle,
         composer=args.composer,
         work_number=args.work_number,
         copyright=args.copyright,
-        comment=args.comment,
+        tagline=args.tagline,
         no_prompt=args.no_prompt,
     )
 

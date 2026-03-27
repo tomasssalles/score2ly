@@ -18,7 +18,8 @@ _PLACEMENT_ELEMENTS = frozenset({"direction", "staccato", "strong-accent", "acce
 _STAFF_DETAILS_ATTRS_TO_STRIP = frozenset({"print-object"})
 
 # Top-level elements to remove entirely
-_TOPLEVEL_REMOVE = frozenset({"work", "identification", "defaults", "credit"})
+_TOPLEVEL_REMOVE = frozenset({"work", "identification", "defaults", "credit",
+                               "movement-number", "movement-title"})
 
 # Children of <score-part> to remove
 _SCORE_PART_REMOVE = frozenset({"score-instrument", "midi-instrument", "midi-device"})

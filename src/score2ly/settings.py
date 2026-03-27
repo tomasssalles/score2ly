@@ -27,10 +27,11 @@ class ConvertSettings:
 
     # Score info (CLI overrides for interactive prompts)
     title: str = ""
+    subtitle: str = ""
     composer: str = ""
     work_number: str = ""
     copyright: str = ""
-    comment: str = ""
+    tagline: str = ""
     no_prompt: bool = False
 
     def preprocessing_is_noop(self) -> bool:

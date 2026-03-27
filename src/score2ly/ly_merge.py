@@ -12,6 +12,7 @@ _MUSICXML2LY_VERSION = re.compile(r'^\\version\s+"([^"]+)"')
 _VAR_DEF = re.compile(r"^\w+ =")
 _VAR_DEF_NAME = re.compile(r"^(\w+)(\s*=)")
 _MUSICXML2LY_AUTO_COMMENT = re.compile(r"^% automatically converted by musicxml2ly .+")
+_HEADER_BLOCK_START = re.compile(r"\\header\b")
 _MUSICXML2LY_SCORE_DEF_COMMENT = re.compile(r"^% The score\b.*")
 _SCORE_START = re.compile(r"^\\score\b")
 _GROUP_TYPE = re.compile(r"\\new\s+(\w+)")
@@ -80,17 +81,35 @@ def _check_musicxml2ly_version(ly_file: Path, stage: int) -> None:
         )
 
 
-def extract_header(ly_file: Path) -> str:
-    """Return the preamble of a musicxml2ly-generated .ly file (everything before the first variable definition)."""
+def extract_preamble(ly_file: Path) -> str:
+    """Return the preamble of a musicxml2ly-generated .ly file, stripped of \\header blocks."""
     lines = ly_file.read_text().splitlines(keepends=True)
-    header_lines = []
+    preamble_lines = []
+    brace_depth = 0
+    in_header_block = False
+
     for line in lines:
         if _VAR_DEF.match(line):
             break
         if _MUSICXML2LY_AUTO_COMMENT.match(line):
             continue
-        header_lines.append(line)
-    return "".join(header_lines).rstrip("\n")
+
+        if not in_header_block and _HEADER_BLOCK_START.search(line):
+            in_header_block = True
+            brace_depth = line.count("{") - line.count("}")
+            if brace_depth <= 0:
+                in_header_block = False
+            continue
+
+        if in_header_block:
+            brace_depth += line.count("{") - line.count("}")
+            if brace_depth <= 0:
+                in_header_block = False
+            continue
+
+        preamble_lines.append(line)
+
+    return "".join(preamble_lines).rstrip("\n")
 
 
 def parse_score_block(ly_file: Path) -> ScoreStructure:
@@ -270,12 +289,12 @@ def build_merged_variables(voice_map: VoiceMap, system_spacers: list[str]) -> st
     return "\n\n".join(blocks)
 
 
-def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path, stage: int) -> None:
+def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path, stage: int, ly_header: str) -> None:
     logger.info("Stage %d: Merging %d LilyPond snippet(s)...", stage, len(ly_xml_pairs))
     ly_paths = [ly for ly, _ in ly_xml_pairs]
     xml_paths = [xml for _, xml in ly_xml_pairs]
     _check_musicxml2ly_version(ly_paths[0], stage)
-    header = extract_header(ly_paths[0])
+    preamble = extract_preamble(ly_paths[0])
     structures = [parse_score_block(p) for p in ly_paths]
     voice_map = _build_voice_map(structures)
     logger.debug("Stage %d: Voice map: %s", stage, voice_map)
@@ -289,4 +308,4 @@ def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path
 
     score_block = build_score_block(structures, voice_map)
     all_renamed = "\n\n".join(renamed_vars)
-    output_ly.write_text(f"{header}\n\n{all_renamed}\n\n{merged_vars}\n\n{score_block}\n")
+    output_ly.write_text(f"{preamble}\n\n{ly_header}\n\n{all_renamed}\n\n{merged_vars}\n\n{score_block}\n")
