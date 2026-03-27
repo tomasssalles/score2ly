@@ -273,16 +273,23 @@ def _collect_score_info(
     pipeline_output_dir = stage_output_dir.parent
     first_xml = sorted(pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML])[0]
     extracted = score_info.extract_from_xml(first_xml)
-
-    # CLI args take priority; fall back to OMR-extracted values
-    defaults = score_info.ScoreInfo(
-        title=settings.title or extracted.title,
-        composer=settings.composer or extracted.composer,
-        work_number=settings.work_number or extracted.work_number,
-        copyright=settings.copyright or extracted.copyright,
+    cli = score_info.ScoreInfo(
+        title=settings.title,
+        composer=settings.composer,
+        work_number=settings.work_number,
+        copyright=settings.copyright,
         comment=settings.comment,
     )
-    info = defaults if settings.no_prompt else score_info.collect(defaults)
+    if settings.no_prompt:
+        info = score_info.ScoreInfo(
+            title=cli.title or extracted.title,
+            composer=cli.composer or extracted.composer,
+            work_number=cli.work_number or extracted.work_number,
+            copyright=cli.copyright or extracted.copyright,
+            comment=cli.comment,
+        )
+    else:
+        info = score_info.collect(cli, extracted)
     dest = stage_output_dir / "score_info.json"
     score_info.save(dest, info)
     yield dest
