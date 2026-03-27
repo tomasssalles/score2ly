@@ -297,14 +297,9 @@ def merge_musicxml2ly(ly_xml_pairs: Sequence[tuple[Path, Path]], output_ly: Path
     preamble = extract_preamble(ly_paths[0])
     structures = [parse_score_block(p) for p in ly_paths]
     voice_map = _build_voice_map(structures)
-    logger.debug("Stage %d: Voice map: %s", stage, voice_map)
     renamed_vars = [extract_renamed_variables(ly, i + 1) for i, ly in enumerate(ly_paths)]
-    logger.debug("Stage %d: Renamed variables collected for %d systems.", stage, len(renamed_vars))
-    logger.debug("Stage %d: Renamed variables for system 1:\n%s", stage, renamed_vars[0])
     system_spacers = [compute_system_spacer(xml) for xml in xml_paths]
-    logger.debug("Stage %d: System spacers: %s", stage, system_spacers)
     merged_vars = build_merged_variables(voice_map, system_spacers)
-    logger.debug("Stage %d: Merged variables:\n%s", stage, merged_vars)
 
     score_block = build_score_block(structures, voice_map)
     all_renamed = "\n\n".join(renamed_vars)
