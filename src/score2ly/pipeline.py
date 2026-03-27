@@ -282,7 +282,7 @@ def _collect_score_info(
         copyright=settings.copyright or extracted.copyright,
         comment=settings.comment,
     )
-    info = score_info.collect(defaults)
+    info = defaults if settings.no_prompt else score_info.collect(defaults)
     dest = stage_output_dir / "score_info.json"
     score_info.save(dest, info)
     yield dest

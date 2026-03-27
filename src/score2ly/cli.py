@@ -47,6 +47,7 @@ def main() -> None:
     score.add_argument("--work-number", default="", help="Work number (e.g. Op. 45, BWV 772, K. 331)")
     score.add_argument("--copyright", default="", help="Copyright / license statement")
     score.add_argument("--comment", default="", help="Comment shown as tagline")
+    score.add_argument("--no-prompt", action="store_true", help="Skip interactive score information prompts, using OMR-extracted values and any CLI args provided")
 
     advanced = convert.add_argument_group("advanced")
     advanced.add_argument("--pdf-kind", choices=["auto", "scan", "vector"], default="auto",
@@ -135,6 +136,7 @@ def _convert(args: argparse.Namespace) -> None:
         work_number=args.work_number,
         copyright=args.copyright,
         comment=args.comment,
+        no_prompt=args.no_prompt,
     )
 
     output.mkdir()

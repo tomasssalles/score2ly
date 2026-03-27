@@ -31,6 +31,7 @@ class ConvertSettings:
     work_number: str = ""
     copyright: str = ""
     comment: str = ""
+    no_prompt: bool = False
 
     def preprocessing_is_noop(self) -> bool:
         return (
