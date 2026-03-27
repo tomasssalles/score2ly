@@ -37,6 +37,20 @@ def save(path: Path, info: ScoreInfo) -> None:
     }, indent=2))
 
 
+def extract_from_xml(xml_path: Path) -> ScoreInfo:
+    """Extract score info from a raw MusicXML file (e.g. Audiveris output)."""
+    root = ET.parse(xml_path).getroot()
+    title = (root.findtext("movement-title") or "").strip()
+    work_number = (root.findtext("work/work-number") or "").strip()
+    composer = ""
+    for creator in root.findall("identification/creator"):
+        if creator.get("type") == "composer":
+            composer = (creator.text or "").strip()
+            break
+    copyright = (root.findtext("identification/rights") or "").strip()
+    return ScoreInfo(title=title, composer=composer, work_number=work_number, copyright=copyright)
+
+
 def collect(overrides: ScoreInfo) -> ScoreInfo:
     """Prompt the user for each field, using overrides as defaults."""
     print("\nEnter score information (press Enter to keep the value in brackets, or leave empty):")

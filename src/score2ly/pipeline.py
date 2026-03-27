@@ -44,13 +44,6 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             fn=_copy_original,
         ),
         _StageParams(
-            stage=Stage.SCORE_INFO,
-            description="Collect score information (title, composer, work number, copyright, comment)",
-            output_dir_name="score_info",
-            dependencies=(Stage.ORIGINAL,),
-            fn=_collect_score_info,
-        ),
-        _StageParams(
             stage=Stage.PREPROCESS,
             description="Rasterize PDF pages to grayscale PNGs, with optional targeted processing for OMR",
             output_dir_name="pages",
@@ -70,6 +63,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="musicxml",
             dependencies=(Stage.OMR,),
             fn=_export_musicxml,
+        ),
+        _StageParams(
+            stage=Stage.SCORE_INFO,
+            description="Collect score information (title, composer, work number, copyright, comment)",
+            output_dir_name="score_info",
+            dependencies=(Stage.MUSICXML,),
+            fn=_collect_score_info,
         ),
         _StageParams(
             stage=Stage.CLEAN_XML,
@@ -270,14 +270,19 @@ def _collect_score_info(
     stage_idx: int,
 ) -> Iterable[Path]:
     logger.info("Stage %d: Collecting score information...", stage_idx)
-    overrides = score_info.ScoreInfo(
-        title=settings.title,
-        composer=settings.composer,
-        work_number=settings.work_number,
-        copyright=settings.copyright,
+    pipeline_output_dir = stage_output_dir.parent
+    first_xml = sorted(pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML])[0]
+    extracted = score_info.extract_from_xml(first_xml)
+
+    # CLI args take priority; fall back to OMR-extracted values
+    defaults = score_info.ScoreInfo(
+        title=settings.title or extracted.title,
+        composer=settings.composer or extracted.composer,
+        work_number=settings.work_number or extracted.work_number,
+        copyright=settings.copyright or extracted.copyright,
         comment=settings.comment,
     )
-    info = score_info.collect(overrides)
+    info = score_info.collect(defaults)
     dest = stage_output_dir / "score_info.json"
     score_info.save(dest, info)
     yield dest
