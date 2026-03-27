@@ -3,6 +3,7 @@ from enum import Enum
 
 class Stage(Enum):
     ORIGINAL      = "original"
+    SCORE_INFO    = "score_info"
     PREPROCESS    = "preprocess"
     OMR           = "omr"
     MUSICXML      = "musicxml"

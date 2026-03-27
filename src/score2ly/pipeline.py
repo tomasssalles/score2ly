@@ -23,6 +23,7 @@ from score2ly import (
     musicxml2ly,
     omr_layout,
     pdf,
+    score_info,
 )
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
@@ -41,6 +42,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="original",
             dependencies=(),
             fn=_copy_original,
+        ),
+        _StageParams(
+            stage=Stage.SCORE_INFO,
+            description="Collect score information (title, composer, work number, copyright, comment)",
+            output_dir_name="score_info",
+            dependencies=(Stage.ORIGINAL,),
+            fn=_collect_score_info,
         ),
         _StageParams(
             stage=Stage.PREPROCESS,
@@ -67,7 +75,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             stage=Stage.CLEAN_XML,
             description="Strip layout and style noise from MusicXML, keeping only musical content",
             output_dir_name="musicxml_clean",
-            dependencies=(Stage.MUSICXML,),
+            dependencies=(Stage.MUSICXML, Stage.SCORE_INFO),
             fn=_clean_musicxml,
         ),
         _StageParams(
@@ -254,6 +262,27 @@ def _copy_original(
     yield dest
 
 
+def _collect_score_info(
+    stage_output_dir: Path,
+    pipeline_input_path: Path | None,
+    settings: ConvertSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Iterable[Path]:
+    logger.info("Stage %d: Collecting score information...", stage_idx)
+    overrides = score_info.ScoreInfo(
+        title=settings.title,
+        composer=settings.composer,
+        work_number=settings.work_number,
+        copyright=settings.copyright,
+        comment=settings.comment,
+    )
+    info = score_info.collect(overrides)
+    dest = stage_output_dir / "score_info.json"
+    score_info.save(dest, info)
+    yield dest
+
+
 def _preprocess(
     stage_output_dir: Path,
     pipeline_input_path: Path | None,
@@ -399,6 +428,8 @@ def _clean_musicxml(
     xml_paths = sorted(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML]
     )
+    info_rel = dependencies_to_outputs[Stage.SCORE_INFO][0]
+    info = score_info.load(pipeline_output_dir / info_rel)
 
     first_measure = 1
     carried_attrs: dict = {}
@@ -408,6 +439,8 @@ def _clean_musicxml(
         first_measure, carried_attrs = musicxml_cleanup.clean(
             xml_path, dest, first_measure=first_measure, carried_attrs=carried_attrs
         )
+        if i == 0:
+            score_info.inject_into_xml(dest, info)
         yield dest
 
 

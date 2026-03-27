@@ -41,6 +41,13 @@ def main() -> None:
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (default: input file's directory)")
     convert.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
 
+    score = convert.add_argument_group("score information")
+    score.add_argument("--title", default="", help="Score title")
+    score.add_argument("--composer", default="", help="Composer name")
+    score.add_argument("--work-number", default="", help="Work number (e.g. Op. 45, BWV 772, K. 331)")
+    score.add_argument("--copyright", default="", help="Copyright / license statement")
+    score.add_argument("--comment", default="", help="Comment shown as tagline")
+
     advanced = convert.add_argument_group("advanced")
     advanced.add_argument("--pdf-kind", choices=["auto", "scan", "vector"], default="auto",
                           help="Override PDF type detection (default: auto)")
@@ -123,6 +130,11 @@ def _convert(args: argparse.Namespace) -> None:
         clahe=args.clahe,
         projection_k=args.projection_k,
         projection_denoise=args.projection_denoise,
+        title=args.title,
+        composer=args.composer,
+        work_number=args.work_number,
+        copyright=args.copyright,
+        comment=args.comment,
     )
 
     output.mkdir()

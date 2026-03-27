@@ -25,6 +25,13 @@ class ConvertSettings:
     projection_k: float = DEFAULT_PROJECTION_K
     projection_denoise: bool = False
 
+    # Score info (CLI overrides for interactive prompts)
+    title: str = ""
+    composer: str = ""
+    work_number: str = ""
+    copyright: str = ""
+    comment: str = ""
+
     def preprocessing_is_noop(self) -> bool:
         return (
             self.sheet_method is SheetMethod.NONE
