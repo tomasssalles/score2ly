@@ -35,7 +35,16 @@ def find_executable() -> Path:
 def run(input_xml: Path, output_ly: Path, stage: int) -> None:
     exe = find_executable()
 
-    cmd = [str(exe), "--no-tagline", str(input_xml), "-o", str(output_ly)]
+    cmd = [
+        str(exe),
+        "--absolute",
+        "--no-page-layout",
+        "--no-stem-directions",
+        "--no-articulation-directions",
+        "--no-rest-positions",
+        str(input_xml),
+        "-o", str(output_ly),
+    ]
     logger.info("Stage %d: Converting MusicXML to LilyPond...", stage)
     logger.debug("Stage %d: Command: %s", stage, " ".join(cmd))
 
