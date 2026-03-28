@@ -66,3 +66,16 @@ Early development.
 - We still need to get some very basic header strings from the user (with helpful suggestions/initial values).
 - In convert/update, just stop after the musicxml2ly+merging+rendering+symlinking results as best so far. If fix is run without the pipeline being finished, crash. When fix runs the first time, use PNG + XML. After that, each fix will use PNG + latest .ly (never fix from the .ly output from musicxml2ly).
 - Whenever .ly files are generated (musicxml2ly, fix round 0, 1, 2, ...) I'd like to merge and render and update the "current best" links in the bundle. But I'm not sure how to handle human intervention (i.e. user manually edits some .ly file, maybe for a single system, maybe one of the merged ones). In that case there should be some updates (e.g. re-merging, re-rendering). But it gets very tricky very fast with these "dynamic stages" of multiple rounds of fixing.
+
+### Things to remember when fixing with an LLM
+
+- Use a first request just with the PDF to draw up a plan: What instrument is being played? How many staves are needed in total? How many voices in each staff? Where and what are the key signatures? Where and what are the time signatures? What will be the names of the staves? What will be the names and roles of the voices? From the header elements that the user has not activelly accepted, given the extracted values, what would be the correct values? Pass this plan as part of the input in every subsequent request. This only has to be done once (no multiple rounds for this part).
+- Instruct it to just output a dictionary mapping the names of the per-voice per-staff variables for the current system to their values.
+- Try using Gemini 3.1 Pro in free-tier. Not the best per-minute and per-day limits, but should have good quality.
+- Show it the full PDF (in grayscale) in every request, telling it "the system we're working on now is the third in page 5" for example. This is in addition to the cropped PNG of the individual system.
+- Tell it that if something is unclear about the current system (e.g. a smudged note), it can use the PDF to look for similar chunks elsewhere in the score to help solve the ambiguity.
+- Ask it to omit time and key signatures (also clef?) when they don't change (the snippets from audiveris+musicxml2ly will have these at the beginning of every system at least).
+- Show it its own output for the previous 1-2 systems so it can work on consistency and continuity.
+- Tell it to use only absolute notation.
+- Tell it to pay attention to spacer rests.
+- Tell it to fill every measure exactly, including the last one of the current system (because that's important for merging later).
