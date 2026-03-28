@@ -3,7 +3,7 @@ from collections.abc import Sequence, Iterable
 from pathlib import Path
 from xml.etree import ElementTree
 
-from score2ly.musicxml_cleanup import inject_missing_attrs
+from score2ly.musicxml_cleanup import inject_missing_attrs, voice_end_positions
 
 _CARRY_FORWARD_TAGS = frozenset({"divisions", "time", "key", "clef"})
 
@@ -95,6 +95,48 @@ def _update_attrs(current: dict, measure: ElementTree.Element) -> None:
                 current[(child.tag, child.attrib.get("number"))] = child
 
 
+def _pad_snippet_voices(root: ElementTree.Element) -> None:
+    """Ensure every voice present anywhere in the snippet fills every measure.
+
+    After the per-measure padding in clean(), voices that appear in at least one
+    measure are already fully padded *within* that measure.  This pass adds a
+    single <forward> covering the full measure duration for any measure where a
+    voice is completely absent.
+    """
+    for part in root.findall("part"):
+        measures = part.findall("measure")
+
+        # Collect all voice IDs and their staff seen anywhere in this snippet
+        snippet_voice_staff: dict[str, str] = {}
+        for measure in measures:
+            _, vstaf = voice_end_positions(measure)
+            for voice_id, staff_id in vstaf.items():
+                snippet_voice_staff[voice_id] = staff_id
+
+        if not snippet_voice_staff:
+            continue
+
+        divisions = 1
+        beats, beat_type = 4, 4
+        for measure in measures:
+            div_text = measure.findtext("attributes/divisions")
+            if div_text:
+                divisions = int(div_text)
+            xml_beats = measure.findtext("attributes/time/beats")
+            xml_beat_type = measure.findtext("attributes/time/beat-type")
+            if xml_beats and xml_beat_type:
+                beats, beat_type = int(xml_beats), int(xml_beat_type)
+            measure_duration = beats * 4 * divisions // beat_type
+
+            present, _ = voice_end_positions(measure)
+            for voice_id, staff_id in snippet_voice_staff.items():
+                if voice_id not in present:
+                    fwd = ElementTree.SubElement(measure, "forward")
+                    ElementTree.SubElement(fwd, "duration").text = str(measure_duration)
+                    ElementTree.SubElement(fwd, "voice").text = voice_id
+                    ElementTree.SubElement(fwd, "staff").text = staff_id
+
+
 def _write_snippet(
     root: ElementTree.Element,
     part_list: ElementTree.Element,
@@ -118,6 +160,8 @@ def _write_snippet(
             if i == 0 and carried:
                 inject_missing_attrs(m_copy, carried)
             new_part.append(m_copy)
+
+    _pad_snippet_voices(new_root)
 
     ElementTree.indent(new_root, space="  ")
     xml_body = ElementTree.tostring(new_root, encoding="unicode", xml_declaration=False)

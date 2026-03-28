@@ -144,7 +144,7 @@ def inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:
             injected += 1
 
 
-def _voice_end_positions(measure: ElementTree.Element) -> tuple[dict[str, int], dict[str, str]]:
+def voice_end_positions(measure: ElementTree.Element) -> tuple[dict[str, int], dict[str, str]]:
     """Return (voice_end, voice_staff) for all voices with content in the measure.
 
     voice_end maps voice_id -> cursor position after the voice's last note/forward.
@@ -183,7 +183,7 @@ def _voice_end_positions(measure: ElementTree.Element) -> tuple[dict[str, int], 
 
 def _pad_voices_in_measure(measure: ElementTree.Element, measure_duration: int) -> None:
     """Append <forward> elements for any voice that ends before measure_duration."""
-    voice_end, voice_staff = _voice_end_positions(measure)
+    voice_end, voice_staff = voice_end_positions(measure)
     for voice_id, end_pos in voice_end.items():
         gap = measure_duration - end_pos
         if gap > 0:
