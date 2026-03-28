@@ -1,6 +1,7 @@
 import copy
 import re
 from collections.abc import Collection
+from fractions import Fraction
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -91,6 +92,19 @@ def clean(
     if first_measure_el is not None and carried_attrs:
         inject_missing_attrs(first_measure_el, carried_attrs)
 
+    # Normalize time signatures: recompute from note durations, replacing Audiveris's
+    initial_time: tuple[int, int] | None = None
+    time_el = carried_attrs.get(("time", None))
+    if time_el is not None:
+        xml_beats = time_el.findtext("beats")
+        xml_beat_type = time_el.findtext("beat-type")
+        if xml_beats and xml_beat_type:
+            initial_time = (int(xml_beats), int(xml_beat_type))
+    _normalize_time_signatures(root, initial_time)
+
+    # Pad any voice that ends before the measure duration with <forward> elements
+    _pad_all_voices(root)
+
     # Collect time/key from this page to carry forward to the next
     new_carried = dict(carried_attrs)
     for measure in root.iter("measure"):
@@ -128,6 +142,169 @@ def inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:
         if not already:
             attrs_el.insert(insert_pos + injected, copy.deepcopy(element))
             injected += 1
+
+
+def _voice_end_positions(measure: ElementTree.Element) -> tuple[dict[str, int], dict[str, str]]:
+    """Return (voice_end, voice_staff) for all voices with content in the measure.
+
+    voice_end maps voice_id -> cursor position after the voice's last note/forward.
+    voice_staff maps voice_id -> staff number (from the most recently seen note/forward).
+    """
+    cursor = 0
+    voice_end: dict[str, int] = {}
+    voice_staff: dict[str, str] = {}
+
+    for child in measure:
+        if child.tag == "note":
+            voice_id = child.findtext("voice")
+            staff_id = child.findtext("staff")
+            if voice_id and staff_id:
+                voice_staff[voice_id] = staff_id
+            if child.find("chord") is None:
+                dur = int(child.findtext("duration") or "0")
+                cursor += dur
+                if voice_id:
+                    voice_end[voice_id] = cursor
+        elif child.tag == "backup":
+            dur = int(child.findtext("duration") or "0")
+            cursor = max(0, cursor - dur)
+        elif child.tag == "forward":
+            dur = int(child.findtext("duration") or "0")
+            cursor += dur
+            voice_id = child.findtext("voice")
+            staff_id = child.findtext("staff")
+            if voice_id:
+                if staff_id:
+                    voice_staff[voice_id] = staff_id
+                voice_end[voice_id] = cursor
+
+    return voice_end, voice_staff
+
+
+def _pad_voices_in_measure(measure: ElementTree.Element, measure_duration: int) -> None:
+    """Append <forward> elements for any voice that ends before measure_duration."""
+    voice_end, voice_staff = _voice_end_positions(measure)
+    for voice_id, end_pos in voice_end.items():
+        gap = measure_duration - end_pos
+        if gap > 0:
+            fwd = ElementTree.SubElement(measure, "forward")
+            ElementTree.SubElement(fwd, "duration").text = str(gap)
+            ElementTree.SubElement(fwd, "voice").text = voice_id
+            if staff_id := voice_staff.get(voice_id):
+                ElementTree.SubElement(fwd, "staff").text = staff_id
+
+
+def _pad_all_voices(root: ElementTree.Element) -> None:
+    """For each measure in each part, pad short voices to their full measure duration."""
+    for part in root.findall("part"):
+        divisions = 1
+        beats, beat_type = 4, 4
+        for measure in part.findall("measure"):
+            div_text = measure.findtext("attributes/divisions")
+            if div_text:
+                divisions = int(div_text)
+            xml_beats = measure.findtext("attributes/time/beats")
+            xml_beat_type = measure.findtext("attributes/time/beat-type")
+            if xml_beats and xml_beat_type:
+                beats, beat_type = int(xml_beats), int(xml_beat_type)
+            measure_duration = beats * 4 * divisions // beat_type
+            _pad_voices_in_measure(measure, measure_duration)
+
+
+def _measure_max_duration(measure: ElementTree.Element) -> int:
+    """Return the maximum forward position reached in a measure (in divisions)."""
+    position = 0
+    max_pos = 0
+    for child in measure:
+        if child.tag == "note" and child.find("chord") is None:
+            dur = int(child.findtext("duration") or "0")
+            position += dur
+            if position > max_pos:
+                max_pos = position
+        elif child.tag == "backup":
+            dur = int(child.findtext("duration") or "0")
+            position = max(0, position - dur)
+        elif child.tag == "forward":
+            dur = int(child.findtext("duration") or "0")
+            position += dur
+            if position > max_pos:
+                max_pos = position
+    return max_pos
+
+
+def _duration_to_time_sig(duration: int, divisions: int) -> tuple[int, int]:
+    """Convert a duration in divisions to (beats, beat_type) via the simplest fraction."""
+    frac = Fraction(duration, divisions)  # in quarter notes
+    return frac.numerator, 4 * frac.denominator
+
+
+def _normalize_time_signatures(
+    root: ElementTree.Element,
+    initial_time: tuple[int, int] | None,
+) -> None:
+    """Recompute time signatures from note durations and replace the XML's entries.
+
+    Uses the first part's measure durations as ground truth.  Audiveris's time
+    signature hints guide the tracked signature; the computed duration overrides
+    when it disagrees.  Time elements are stripped from all parts and reinserted
+    only at the first measure and wherever the signature changes.
+    """
+    parts = root.findall("part")
+    if not parts:
+        return
+
+    # --- Phase 1: determine effective time sig for each measure (first part only) ---
+    divisions = 1
+    current_sig = initial_time
+    effective_sigs: list[tuple[int, int] | None] = []
+
+    for measure in parts[0].findall("measure"):
+        div_text = measure.findtext("attributes/divisions")
+        if div_text:
+            divisions = int(div_text)
+
+        # Update with Audiveris hint if present
+        xml_beats = measure.findtext("attributes/time/beats")
+        xml_beat_type = measure.findtext("attributes/time/beat-type")
+        if xml_beats and xml_beat_type:
+            current_sig = (int(xml_beats), int(xml_beat_type))
+
+        # Compute actual duration; override tracked sig if the duration is incompatible
+        dur = _measure_max_duration(measure)
+        if dur > 0:
+            actual = Fraction(dur, divisions)  # in quarter notes
+            if current_sig is None:
+                current_sig = _duration_to_time_sig(dur, divisions)
+            else:
+                sig_duration = Fraction(current_sig[0] * 4, current_sig[1])
+                if actual != sig_duration:
+                    current_sig = _duration_to_time_sig(dur, divisions)
+
+        effective_sigs.append(current_sig)
+
+    # --- Phase 2: strip all <time> elements and reinsert at changes ---
+    for part in parts:
+        last_inserted = initial_time
+        for idx, measure in enumerate(part.findall("measure")):
+            for attrs_el in measure.findall("attributes"):
+                for time_el in list(attrs_el.findall("time")):
+                    attrs_el.remove(time_el)
+
+            sig = effective_sigs[idx] if idx < len(effective_sigs) else current_sig
+            if sig is None or sig == last_inserted:
+                continue
+
+            attrs_el = measure.find("attributes")
+            if attrs_el is None:
+                attrs_el = ElementTree.Element("attributes")
+                measure.insert(0, attrs_el)
+
+            time_el = ElementTree.Element("time")
+            ElementTree.SubElement(time_el, "beats").text = str(sig[0])
+            ElementTree.SubElement(time_el, "beat-type").text = str(sig[1])
+            div_idx = next((j for j, c in enumerate(attrs_el) if c.tag == "divisions"), -1)
+            attrs_el.insert(div_idx + 1, time_el)
+            last_inserted = sig
 
 
 def _remove_children(parent: ElementTree.Element, tags: Collection[str]) -> None:
