@@ -14,8 +14,8 @@ _MUSICXML2LY_VERSION = re.compile(r'^\\version\s+"([^"]+)"')
 _VAR_DEF = re.compile(r"^\w+ =")
 _MUSICXML2LY_AUTO_COMMENT = re.compile(r"^% automatically converted by musicxml2ly .+")
 _HEADER_BLOCK_START = re.compile(r"\\header\b")
-_INSTRUMENT_NAME_LINE = re.compile(r"^[ \t]*\\set\s+\w+\.instrumentName\s*=.*(?:\n|$)")
-_SHORT_INSTRUMENT_NAME_LINE = re.compile(r"^[ \t]*\\set\s+\w+\.shortInstrumentName\s*=.*(?:\n|$)")
+_INSTRUMENT_NAME_LINE = re.compile(r"^[ \t]*\\set\s+\w+\.instrumentName\s*=.*(?:\n|$)", re.MULTILINE)
+_SHORT_INSTRUMENT_NAME_LINE = re.compile(r"^[ \t]*\\set\s+\w+\.shortInstrumentName\s*=.*(?:\n|$)", re.MULTILINE)
 
 
 def _check_musicxml2ly_version(ly_file: Path, stage: int) -> None:
