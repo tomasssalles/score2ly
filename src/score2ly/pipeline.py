@@ -108,9 +108,9 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
         ),
         _StageParams(
             stage=Stage.LY_MERGE,
-            description="Merge per-system LilyPond snippets into a single score",
+            description="Concatenate clean MusicXMLs and convert to a single LilyPond score",
             output_dir_name="ly_merge",
-            dependencies=(Stage.LY_SNIPPETS, Stage.XML_SNIPPETS, Stage.SCORE_INFO),
+            dependencies=(Stage.CLEAN_XML, Stage.SCORE_INFO),
             fn=_merge_ly,
         ),
         _StageParams(
@@ -559,31 +559,15 @@ def _merge_ly(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    ly_paths = sorted(
-        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.LY_SNIPPETS]
+    clean_xml_paths = sorted(
+        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.CLEAN_XML]
     )
-    xml_paths = sorted(
-        pipeline_output_dir / p
-        for p in dependencies_to_outputs[Stage.XML_SNIPPETS]
-        if Path(p).parent.name == "systems"
-    )
-
-    if len(ly_paths) != len(xml_paths):
-        raise RuntimeError(
-            f"Stage {stage_idx}: LY_SNIPPETS ({len(ly_paths)}) and XML_SNIPPETS ({len(xml_paths)}) "
-            f"system counts do not match. Cannot merge."
-        )
-    for ly, xml in zip(ly_paths, xml_paths):
-        if ly.stem != xml.stem:
-            raise RuntimeError(
-                f"Stage {stage_idx}: LY/XML snippet mismatch: {ly.name} vs {xml.name}."
-            )
 
     info = score_info.load(pipeline_output_dir / dependencies_to_outputs[Stage.SCORE_INFO][0])
     ly_header = score_info.build_ly_header(info)
 
     dest = stage_output_dir / "score.ly"
-    ly_merge.merge_musicxml2ly(list(zip(ly_paths, xml_paths)), dest, stage_idx, ly_header)
+    ly_merge.merge_ly(clean_xml_paths, dest, stage_idx, ly_header)
     yield dest
 
 
