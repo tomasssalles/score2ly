@@ -14,6 +14,8 @@ _MUSICXML2LY_VERSION = re.compile(r'^\\version\s+"([^"]+)"')
 _VAR_DEF = re.compile(r"^\w+ =")
 _MUSICXML2LY_AUTO_COMMENT = re.compile(r"^% automatically converted by musicxml2ly .+")
 _HEADER_BLOCK_START = re.compile(r"\\header\b")
+_INSTRUMENT_NAME_LINE = re.compile(r"^[ \t]*\\set\s+\w+\.instrumentName\s*=.*(?:\n|$)")
+_SHORT_INSTRUMENT_NAME_LINE = re.compile(r"^[ \t]*\\set\s+\w+\.shortInstrumentName\s*=.*(?:\n|$)")
 
 
 def _check_musicxml2ly_version(ly_file: Path, stage: int) -> None:
@@ -135,4 +137,7 @@ def merge_ly(clean_xml_paths: Sequence[Path], output_ly: Path, stage: int, ly_he
     _check_musicxml2ly_version(tmp_ly, stage)
 
     preamble, rest = _split_preamble(tmp_ly)
+    if len(_INSTRUMENT_NAME_LINE.findall(rest)) <= 1 and len(_SHORT_INSTRUMENT_NAME_LINE.findall(rest)) <= 1:
+        rest = _INSTRUMENT_NAME_LINE.sub("", rest)
+        rest = _SHORT_INSTRUMENT_NAME_LINE.sub("", rest)
     output_ly.write_text(f"{preamble}\n\n{ly_header}\n\n{rest}")

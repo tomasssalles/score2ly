@@ -65,6 +65,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             fn=_export_musicxml,
         ),
         _StageParams(
+            stage=Stage.CLEAN_XML,
+            description="Strip layout and style noise from MusicXML, keeping only musical content",
+            output_dir_name="musicxml_clean",
+            dependencies=(Stage.MUSICXML,),
+            fn=_clean_musicxml,
+        ),
+        _StageParams(
             stage=Stage.SCORE_INFO,
             description="Collect score information (title, composer, work number, copyright, comment)",
             output_dir_name="score_info",
@@ -72,11 +79,18 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             fn=_collect_score_info,
         ),
         _StageParams(
-            stage=Stage.CLEAN_XML,
-            description="Strip layout and style noise from MusicXML, keeping only musical content",
-            output_dir_name="musicxml_clean",
-            dependencies=(Stage.MUSICXML,),
-            fn=_clean_musicxml,
+            stage=Stage.LY_MERGE,
+            description="Concatenate clean MusicXMLs and convert to a single LilyPond score",
+            output_dir_name="ly_merge",
+            dependencies=(Stage.CLEAN_XML, Stage.SCORE_INFO),
+            fn=_merge_ly,
+        ),
+        _StageParams(
+            stage=Stage.LY_RENDER,
+            description="Render merged LilyPond score to PDF",
+            output_dir_name="ly_render",
+            dependencies=(Stage.LY_MERGE,),
+            fn=_render_ly,
         ),
         _StageParams(
             stage=Stage.LAYOUT,
@@ -105,20 +119,6 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | N
             output_dir_name="ly_snippets",
             dependencies=(Stage.XML_SNIPPETS,),
             fn=_convert_ly_snippets,
-        ),
-        _StageParams(
-            stage=Stage.LY_MERGE,
-            description="Concatenate clean MusicXMLs and convert to a single LilyPond score",
-            output_dir_name="ly_merge",
-            dependencies=(Stage.CLEAN_XML, Stage.SCORE_INFO),
-            fn=_merge_ly,
-        ),
-        _StageParams(
-            stage=Stage.LY_RENDER,
-            description="Render merged LilyPond score to PDF",
-            output_dir_name="ly_render",
-            dependencies=(Stage.LY_MERGE,),
-            fn=_render_ly,
         ),
     )
 
@@ -568,6 +568,12 @@ def _merge_ly(
 
     dest = stage_output_dir / "score.ly"
     ly_merge.merge_ly(clean_xml_paths, dest, stage_idx, ly_header)
+
+    link = pipeline_output_dir / "transcription.ly"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(dest.relative_to(pipeline_output_dir, walk_up=True))
+
     yield dest
 
 
@@ -583,6 +589,12 @@ def _render_ly(
     score_ly = pipeline_output_dir / score_ly_rel
     dest = stage_output_dir / "score.pdf"
     lilypond.render(score_ly, dest, stage_idx)
+
+    link = pipeline_output_dir / "transcription.pdf"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(dest.relative_to(pipeline_output_dir, walk_up=True))
+
     yield dest
 
 
