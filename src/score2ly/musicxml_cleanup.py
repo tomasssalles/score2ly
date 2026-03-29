@@ -102,9 +102,6 @@ def clean(
             initial_time = (int(xml_beats), int(xml_beat_type))
     _normalize_time_signatures(root, initial_time)
 
-    # Pad any voice that ends before the measure duration with <forward> elements
-    _pad_all_voices(root)
-
     # Collect time/key from this page to carry forward to the next
     new_carried = dict(carried_attrs)
     for measure in root.iter("measure"):
@@ -142,73 +139,6 @@ def inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:
         if not already:
             attrs_el.insert(insert_pos + injected, copy.deepcopy(element))
             injected += 1
-
-
-def voice_end_positions(measure: ElementTree.Element) -> tuple[dict[str, int], dict[str, str]]:
-    """Return (voice_end, voice_staff) for all voices with content in the measure.
-
-    voice_end maps voice_id -> cursor position after the voice's last note/forward.
-    voice_staff maps voice_id -> staff number (from the most recently seen note/forward).
-    """
-    cursor = 0
-    voice_end: dict[str, int] = {}
-    voice_staff: dict[str, str] = {}
-
-    for child in measure:
-        if child.tag == "note":
-            voice_id = child.findtext("voice")
-            staff_id = child.findtext("staff")
-            if voice_id and staff_id:
-                voice_staff[voice_id] = staff_id
-            if child.find("chord") is None:
-                dur = int(child.findtext("duration") or "0")
-                cursor += dur
-                if voice_id:
-                    voice_end[voice_id] = cursor
-        elif child.tag == "backup":
-            dur = int(child.findtext("duration") or "0")
-            cursor = max(0, cursor - dur)
-        elif child.tag == "forward":
-            dur = int(child.findtext("duration") or "0")
-            cursor += dur
-            voice_id = child.findtext("voice")
-            staff_id = child.findtext("staff")
-            if voice_id:
-                if staff_id:
-                    voice_staff[voice_id] = staff_id
-                voice_end[voice_id] = cursor
-
-    return voice_end, voice_staff
-
-
-def _pad_voices_in_measure(measure: ElementTree.Element, measure_duration: int) -> None:
-    """Append <forward> elements for any voice that ends before measure_duration."""
-    voice_end, voice_staff = voice_end_positions(measure)
-    for voice_id, end_pos in voice_end.items():
-        gap = measure_duration - end_pos
-        if gap > 0:
-            fwd = ElementTree.SubElement(measure, "forward")
-            ElementTree.SubElement(fwd, "duration").text = str(gap)
-            ElementTree.SubElement(fwd, "voice").text = voice_id
-            if staff_id := voice_staff.get(voice_id):
-                ElementTree.SubElement(fwd, "staff").text = staff_id
-
-
-def _pad_all_voices(root: ElementTree.Element) -> None:
-    """For each measure in each part, pad short voices to their full measure duration."""
-    for part in root.findall("part"):
-        divisions = 1
-        beats, beat_type = 4, 4
-        for measure in part.findall("measure"):
-            div_text = measure.findtext("attributes/divisions")
-            if div_text:
-                divisions = int(div_text)
-            xml_beats = measure.findtext("attributes/time/beats")
-            xml_beat_type = measure.findtext("attributes/time/beat-type")
-            if xml_beats and xml_beat_type:
-                beats, beat_type = int(xml_beats), int(xml_beat_type)
-            measure_duration = beats * 4 * divisions // beat_type
-            _pad_voices_in_measure(measure, measure_duration)
 
 
 def _measure_max_duration(measure: ElementTree.Element) -> int:
