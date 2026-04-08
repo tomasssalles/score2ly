@@ -8,7 +8,6 @@ from score2ly.image_processing import BlockMethod, SheetMethod
 class ConvertSettings:
     # PDF type
     pdf_kind: Literal["auto", "vector", "scan"] = "auto"
-    on_omr_failure: Literal["abort", "skip-page", "ask"] = "abort"
 
     # Image preprocessing (for scans)
     sheet_method: SheetMethod = SheetMethod.NONE

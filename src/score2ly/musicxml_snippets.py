@@ -8,7 +8,7 @@ from score2ly.musicxml_cleanup import inject_missing_attrs
 _CARRY_FORWARD_TAGS = frozenset({"divisions", "time", "key", "clef"})
 
 
-def extract_page_snippets(
+def extract_snippets(
     clean_xml_path: Path,
     systems: Sequence[dict],
     systems_dir: Path,

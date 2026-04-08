@@ -1,9 +1,7 @@
 import logging
 import re
 import tempfile
-from collections.abc import Sequence
 from pathlib import Path
-from xml.etree import ElementTree
 
 from score2ly import musicxml2ly
 
@@ -87,53 +85,10 @@ def _split_preamble(ly_file: Path) -> tuple[str, str]:
     return "".join(preamble_lines).rstrip("\n"), "".join(rest_lines)
 
 
-def concatenate_clean_xmls(clean_xml_paths: Sequence[Path], output_xml: Path, stage: int) -> None:
-    """Concatenate clean per-page MusicXML files into a single MusicXML file.
-
-    Uses the part-list from page 1 as canonical.  Measures from each part are
-    concatenated across pages in order.  Warns if any page has a different number
-    of parts or different part ID sequence from page 1.
-    """
-    roots = [ElementTree.parse(p).getroot() for p in clean_xml_paths]
-
-    ref_part_ids = [p.attrib["id"] for p in roots[0].findall("part")]
-    for i, root in enumerate(roots[1:], start=2):
-        page_part_ids = [p.attrib["id"] for p in root.findall("part")]
-        if len(page_part_ids) != len(ref_part_ids):
-            logger.warning(
-                "Stage %d: Page %d has %d part(s) but page 1 has %d — using page 1 part-list.",
-                stage, i, len(page_part_ids), len(ref_part_ids),
-            )
-        elif page_part_ids != ref_part_ids:
-            logger.warning(
-                "Stage %d: Page %d part IDs %s differ from page 1 %s — mapping by index.",
-                stage, i, page_part_ids, ref_part_ids,
-            )
-
-    new_root = ElementTree.Element(roots[0].tag, roots[0].attrib)
-    new_root.append(roots[0].find("part-list"))
-
-    for part_idx, part_id in enumerate(ref_part_ids):
-        new_part = ElementTree.SubElement(new_root, "part", {"id": part_id})
-        for root in roots:
-            parts = root.findall("part")
-            if part_idx < len(parts):
-                for measure in parts[part_idx].findall("measure"):
-                    new_part.append(measure)
-
-    ElementTree.indent(new_root, space="  ")
-    xml_body = ElementTree.tostring(new_root, encoding="unicode", xml_declaration=False)
-    output_xml.write_text('<?xml version="1.0" encoding="UTF-8"?>\n' + xml_body, encoding="utf-8")
-
-
-def merge_ly(clean_xml_paths: Sequence[Path], output_ly: Path, stage: int, ly_header: str) -> None:
-    """Merge clean per-page MusicXMLs into a single LilyPond score via musicxml2ly."""
-    tmp = Path(tempfile.gettempdir()) / f"score2ly_{output_ly.parent.parent.name}_merged.xml"
-    logger.info("Stage %d: Concatenating %d clean XML(s) into %s...", stage, len(clean_xml_paths), tmp)
-    concatenate_clean_xmls(clean_xml_paths, tmp, stage)
-
-    tmp_ly = tmp.with_suffix(".ly")
-    musicxml2ly.run(tmp, tmp_ly, stage)
+def merge_ly(clean_xml_path: Path, output_ly: Path, stage: int, ly_header: str) -> None:
+    """Convert the clean MusicXML into a single LilyPond score via musicxml2ly."""
+    tmp_ly = Path(tempfile.gettempdir()) / f"score2ly_{output_ly.parent.parent.name}.ly"
+    musicxml2ly.run(clean_xml_path, tmp_ly, stage)
     _check_musicxml2ly_version(tmp_ly, stage)
 
     preamble, rest = _split_preamble(tmp_ly)

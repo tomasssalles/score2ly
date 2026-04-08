@@ -25,22 +25,9 @@ _TOPLEVEL_REMOVE = frozenset({"work", "identification", "defaults", "credit",
 # Children of <score-part> to remove
 _SCORE_PART_REMOVE = frozenset({"score-instrument", "midi-instrument", "midi-device"})
 
-# Attributes carried forward from page to page when not reprinted
-_PAGE_CARRY_FORWARD_TAGS = frozenset({"time", "key"})
 
-
-def clean(
-    input_path: Path,
-    output_path: Path,
-    first_measure: int = 1,
-    carried_attrs: dict | None = None,
-) -> tuple[int, dict]:
-    """Clean the MusicXML file and renumber measures starting from first_measure.
-
-    Returns (first_measure_for_next_page, carried_attrs_for_next_page).
-    """
-    carried_attrs = carried_attrs or {}
-
+def clean(input_path: Path, output_path: Path) -> None:
+    """Clean the MusicXML file, keeping only musical content."""
     raw = input_path.read_text(encoding="utf-8")
     doctype = _extract_doctype(raw)
 
@@ -54,13 +41,10 @@ def clean(
     for score_part in root.findall("part-list/score-part"):
         _remove_children(score_part, _SCORE_PART_REMOVE)
 
-    # Remove <print> blocks from every measure and apply global numbering
-    measure_count = 0
+    # Remove <print> blocks and width attributes from every measure
     for measure in root.iter("measure"):
-        measure.set("number", str(first_measure + measure_count))
         measure.attrib.pop("width", None)
         _remove_children(measure, {"print"})
-        measure_count += 1
 
     # Strip coordinate and style attributes from all elements
     for el in root.iter():
@@ -87,28 +71,8 @@ def clean(
         for attr in _STAFF_DETAILS_ATTRS_TO_STRIP:
             staff_details.attrib.pop(attr, None)
 
-    # Inject carried attributes into first measure if missing
-    first_measure_el = next(root.iter("measure"), None)
-    if first_measure_el is not None and carried_attrs:
-        inject_missing_attrs(first_measure_el, carried_attrs)
-
     # Normalize time signatures: recompute from note durations, replacing Audiveris's
-    initial_time: tuple[int, int] | None = None
-    time_el = carried_attrs.get(("time", None))
-    if time_el is not None:
-        xml_beats = time_el.findtext("beats")
-        xml_beat_type = time_el.findtext("beat-type")
-        if xml_beats and xml_beat_type:
-            initial_time = (int(xml_beats), int(xml_beat_type))
-    _normalize_time_signatures(root, initial_time)
-
-    # Collect time/key from this page to carry forward to the next
-    new_carried = dict(carried_attrs)
-    for measure in root.iter("measure"):
-        for attrs_el in measure.findall("attributes"):
-            for child in attrs_el:
-                if child.tag in _PAGE_CARRY_FORWARD_TAGS:
-                    new_carried[(child.tag, child.attrib.get("number"))] = copy.deepcopy(child)
+    _normalize_time_signatures(root, None)
 
     ElementTree.indent(root, space="  ")
     xml_body = ElementTree.tostring(root, encoding="unicode", xml_declaration=False)
@@ -118,7 +82,6 @@ def clean(
         parts.append(doctype)
     parts.append(xml_body)
     output_path.write_text("\n".join(parts), encoding="utf-8")
-    return first_measure + measure_count, new_carried
 
 
 def inject_missing_attrs(measure: ElementTree.Element, carried: dict) -> None:

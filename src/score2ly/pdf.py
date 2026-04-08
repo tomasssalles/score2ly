@@ -1,7 +1,9 @@
 import logging
 import math
+from collections.abc import Sequence
 from pathlib import Path
 
+from PIL import Image
 from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,18 @@ def page_rasterization_dpi(width_pts: float, height_pts: float) -> int:
             width_in, height_in, _DESIRED_DPI,
         )
     return min(_DESIRED_DPI, limit_dpi)
+
+
+def build_omr_pdf(png_paths: Sequence[Path], output_pdf: Path) -> None:
+    """Build a single multi-page PDF from preprocessed page PNGs for Audiveris OMR.
+
+    Pages are embedded at 300 DPI so Audiveris's rasterization produces
+    pixel coordinates that match the source PNGs.
+    """
+    pages = [Image.open(p) for p in png_paths]
+    if not pages:
+        raise ValueError("No pages to build PDF from")
+    pages[0].save(output_pdf, "PDF", resolution=_DESIRED_DPI, save_all=True, append_images=pages[1:])
 
 
 def is_vector(pdf_path: Path) -> bool:

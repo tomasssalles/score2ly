@@ -50,21 +50,21 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
         ),
         _StageParams(
             stage=Stage.OMR,
-            description="OMR transcription via Audiveris, one .omr project per page",
+            description="Build a PDF from preprocessed page PNGs and run Audiveris OMR, producing a single .omr",
             output_dir_name="audiveris_omr",
             dependencies=(Stage.PREPROCESS,),
             fn=_omr,
         ),
         _StageParams(
             stage=Stage.MUSICXML,
-            description="Export MusicXML from Audiveris .omr projects, one per page",
+            description="Export MusicXML from the Audiveris .omr project",
             output_dir_name="musicxml",
             dependencies=(Stage.OMR,),
             fn=_export_musicxml,
         ),
         _StageParams(
             stage=Stage.CLEAN_XML,
-            description="Strip layout and style noise from MusicXML, keeping only musical content",
+            description="Strip layout and style noise from the MusicXML, keeping only musical content",
             output_dir_name="musicxml_clean",
             dependencies=(Stage.MUSICXML,),
             fn=_clean_musicxml,
@@ -78,7 +78,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
         ),
         _StageParams(
             stage=Stage.LY_MERGE,
-            description="Concatenate clean MusicXMLs and convert to a single LilyPond score",
+            description="Convert clean MusicXMLs to a single LilyPond score",
             output_dir_name="ly_merge",
             dependencies=(Stage.CLEAN_XML, Stage.SCORE_INFO),
             fn=_merge_ly,
@@ -359,50 +359,11 @@ def _omr(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.PREPROCESS]
     )
 
-    for i, page_path in enumerate(page_paths):
-        logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(page_paths))
-        try:
-            yield audiveris.run_omr(page_path, stage_output_dir, stage_idx)
-        except RuntimeError as e:
-            if not _should_skip_on_omr_failure(e, page_path, i + 1, len(page_paths), settings, stage_idx):
-                raise
+    logger.info("Stage %d: Building PDF from %d page(s) for Audiveris...", stage_idx, len(page_paths))
+    omr_pdf = stage_output_dir / "pages.pdf"
+    pdf.build_omr_pdf(page_paths, omr_pdf)
 
-
-def _should_skip_on_omr_failure(
-    error: RuntimeError,
-    page_path: Path,
-    page_num: int,
-    page_count: int,
-    settings: ConvertSettings,
-    stage_idx: int,
-) -> bool:
-    """Handle an OMR failure. Returns True if the page should be skipped, False to re-raise."""
-    if settings.on_omr_failure == "skip-page":
-        logger.warning(
-            "Stage %d: OMR failed on page %d/%d, skipping because '--on-omr-failure=skip-page'. Error: %s",
-            stage_idx, page_num, page_count, error
-        )
-        return True
-    if settings.on_omr_failure == "ask":
-        print(
-            f"\n"
-            f"Stage {stage_idx}: OMR failed on page {page_num}/{page_count}.\n"
-            f"Preprocessed image: {page_path}\n"
-            f"Error: {error}\n"
-            f""
-        )
-        while True:
-            answer = input("Skip this page and continue, or abort? [skip/abort] ").strip().lower()
-            if answer in ("skip", "s"):
-                logger.warning(
-                    "Stage %d: OMR failed on page %d/%d, skipping on user request. Error: %s",
-                    stage_idx, page_num, page_count, error
-                )
-                return True
-            if answer in ("abort", "a"):
-                return False
-            print("Please enter 'skip' or 'abort'.")
-    return False
+    yield audiveris.run_omr(omr_pdf, stage_output_dir, stage_idx)
 
 
 def _export_musicxml(
@@ -413,13 +374,8 @@ def _export_musicxml(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    omr_paths = sorted(
-        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.OMR]
-    )
-
-    for i, omr_path in enumerate(omr_paths):
-        logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(omr_paths))
-        yield audiveris.export_xml(omr_path, stage_output_dir, stage_idx)
+    omr_path = pipeline_output_dir / dependencies_to_outputs[Stage.OMR][0]
+    yield audiveris.export_xml(omr_path, stage_output_dir, stage_idx)
 
 
 def _clean_musicxml(
@@ -430,19 +386,10 @@ def _clean_musicxml(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    xml_paths = sorted(
-        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML]
-    )
-
-    first_measure = 1
-    carried_attrs: dict = {}
-    for i, xml_path in enumerate(xml_paths):
-        logger.info("Stage %d: Processing page %d/%d...", stage_idx, i + 1, len(xml_paths))
-        dest = stage_output_dir / xml_path.with_suffix(".clean" + xml_path.suffix).name
-        first_measure, carried_attrs = musicxml_cleanup.clean(
-            xml_path, dest, first_measure=first_measure, carried_attrs=carried_attrs
-        )
-        yield dest
+    xml_path = pipeline_output_dir / dependencies_to_outputs[Stage.MUSICXML][0]
+    dest = stage_output_dir / xml_path.with_suffix(".clean" + xml_path.suffix).name
+    musicxml_cleanup.clean(xml_path, dest)
+    yield dest
 
 
 def _extract_layout(
@@ -453,26 +400,19 @@ def _extract_layout(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    omr_paths = sorted(
-        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.OMR]
-    )
+    omr_path = pipeline_output_dir / dependencies_to_outputs[Stage.OMR][0]
 
-    combined_sheets = []
-    measure_offset = 0
+    result, _ = omr_layout.extract(omr_path, stage_idx)
+
     global_system_id = 0
-    for omr_path in omr_paths:
-        page_num = int(omr_path.stem.split("_")[1])
-        result, measure_offset = omr_layout.extract(omr_path, stage_idx, initial_measure_offset=measure_offset)
-        for sheet in result["sheets"]:
-            sheet["sheet"] = page_num
-            for system in sheet["systems"]:
-                global_system_id += 1
-                system["local_id"] = system.pop("id")
-                system["global_id"] = global_system_id
-            combined_sheets.append(sheet)
+    for sheet in result["sheets"]:
+        for system in sheet["systems"]:
+            global_system_id += 1
+            system["local_id"] = system.pop("id")
+            system["global_id"] = global_system_id
 
     dest = stage_output_dir / "layout.json"
-    dest.write_text(json.dumps({"sheets": combined_sheets}, indent=2))
+    dest.write_text(json.dumps(result, indent=2))
     yield dest
 
 
@@ -523,23 +463,15 @@ def _extract_xml_snippets(
     layout_path = pipeline_output_dir / dependencies_to_outputs[Stage.LAYOUT][0]
     layout = json.loads(layout_path.read_text())
 
-    clean_xml_by_page = {
-        int(p.stem.split(".")[0].split("_")[1]): pipeline_output_dir / p
-        for p in dependencies_to_outputs[Stage.CLEAN_XML]
-    }
+    clean_xml_path = pipeline_output_dir / dependencies_to_outputs[Stage.CLEAN_XML][0]
 
     systems_dir = stage_output_dir / "systems"
     measures_dir = stage_output_dir / "measures"
     systems_dir.mkdir()
     measures_dir.mkdir()
 
-    for sheet in layout["sheets"]:
-        page_num = sheet["sheet"]
-        logger.info("Stage %d: Processing page %d/%d...", stage_idx, page_num, len(layout["sheets"]))
-        clean_xml_path = clean_xml_by_page[page_num]
-        yield from musicxml_snippets.extract_page_snippets(
-            clean_xml_path, sheet["systems"], systems_dir, measures_dir
-        )
+    all_systems = [system for sheet in layout["sheets"] for system in sheet["systems"]]
+    yield from musicxml_snippets.extract_snippets(clean_xml_path, all_systems, systems_dir, measures_dir)
 
 
 def _merge_ly(
@@ -550,15 +482,13 @@ def _merge_ly(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    clean_xml_paths = sorted(
-        pipeline_output_dir / p for p in dependencies_to_outputs[Stage.CLEAN_XML]
-    )
+    clean_xml_path = pipeline_output_dir / dependencies_to_outputs[Stage.CLEAN_XML][0]
 
     info = score_info.load(pipeline_output_dir / dependencies_to_outputs[Stage.SCORE_INFO][0])
     ly_header = score_info.build_ly_header(info)
 
     dest = stage_output_dir / "score.ly"
-    ly_merge.merge_ly(clean_xml_paths, dest, stage_idx, ly_header)
+    ly_merge.merge_ly(clean_xml_path, dest, stage_idx, ly_header)
 
     link = pipeline_output_dir / "transcription.ly"
     if link.is_symlink() or link.exists():
