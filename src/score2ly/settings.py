@@ -1,28 +1,22 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from score2ly.image_processing import (
-    BlockMethod,
-    SheetMethod,
-    DEFAULT_SHEET_METHOD,
-    DEFAULT_BLOCK_METHOD,
-    DEFAULT_PROJECTION_K,
-)
+from score2ly.image_processing import BlockMethod, SheetMethod
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ConvertSettings:
     # PDF type
     pdf_kind: Literal["auto", "vector", "scan"] = "auto"
     on_omr_failure: Literal["abort", "skip-page", "ask"] = "abort"
 
     # Image preprocessing (for scans)
-    sheet_method: SheetMethod = DEFAULT_SHEET_METHOD
-    block_method: BlockMethod = DEFAULT_BLOCK_METHOD
+    sheet_method: SheetMethod = SheetMethod.NONE
+    block_method: BlockMethod = BlockMethod.NONE
     deskew: bool = False
     tight_crop: bool = False
     clahe: bool = False
-    projection_k: float = DEFAULT_PROJECTION_K
+    projection_k: float = 1.5
     projection_denoise: bool = False
 
     # Score info (CLI overrides for interactive prompts)

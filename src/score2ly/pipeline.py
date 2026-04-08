@@ -32,9 +32,7 @@ from score2ly.utils import relative
 logger = logging.getLogger(__name__)
 
 
-def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings | None = None) -> None:
-    settings = settings or ConvertSettings()
-
+def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) -> None:
     stages: Sequence[_StageParams] = (
         _StageParams(
             stage=Stage.ORIGINAL,

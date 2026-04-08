@@ -6,7 +6,7 @@ from pathlib import Path
 from score2ly.stages import Stage
 from score2ly.utils import relative
 
-METADATA_FILENAME = "score2ly.metadata.json"
+METADATA_FILENAME = "score2ly_metadata.json"
 
 
 def _path(output_dir: Path) -> Path:

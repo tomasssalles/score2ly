@@ -26,11 +26,6 @@ class BlockMethod(str, Enum):
     PROJECTION = "projection"
 
 
-DEFAULT_SHEET_METHOD = SheetMethod.NONE
-DEFAULT_BLOCK_METHOD = BlockMethod.NONE
-DEFAULT_PROJECTION_K = 1.5
-
-
 @dataclass
 class _DebugCtx:
     debug_dir: Path | None
