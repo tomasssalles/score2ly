@@ -280,14 +280,7 @@ def _collect_score_info(
         tagline=score_info.ScoreField(text=settings.tagline),
     )
     if settings.no_prompt:
-        info = score_info.ScoreInfo(
-            title=score_info.ScoreField(text=cli.title.text or extracted.title.text, confirmed=bool(cli.title.text)),
-            subtitle=score_info.ScoreField(text=cli.subtitle.text or extracted.subtitle.text, confirmed=bool(cli.subtitle.text)),
-            composer=score_info.ScoreField(text=cli.composer.text or extracted.composer.text, confirmed=bool(cli.composer.text)),
-            work_number=score_info.ScoreField(text=cli.work_number.text or extracted.work_number.text, confirmed=bool(cli.work_number.text)),
-            copyright=score_info.ScoreField(text=cli.copyright.text or extracted.copyright.text, confirmed=bool(cli.copyright.text)),
-            tagline=score_info.ScoreField(text=cli.tagline.text or extracted.tagline.text, confirmed=bool(cli.tagline.text)),
-        )
+        info = score_info.combine_non_interactive(cli, extracted)
     else:
         info = score_info.collect(cli, extracted)
     dest = stage_output_dir / "score_info.json"

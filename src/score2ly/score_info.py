@@ -60,6 +60,18 @@ def extract_from_xml(xml_path: Path) -> ScoreInfo:
     )
 
 
+def combine_non_interactive(cli: ScoreInfo, extracted: ScoreInfo) -> ScoreInfo:
+    kwargs = {}
+    for f in fields(ScoreInfo):
+        cli_text = getattr(cli, f.name).text
+        extracted_text = getattr(extracted, f.name).text
+        text = "" if cli_text == "-" else (cli_text or extracted_text)
+        confirmed = bool(cli_text)
+        kwargs[f.name] = ScoreField(text=text, confirmed=confirmed)
+
+    return ScoreInfo(**kwargs)
+
+
 def collect(cli: ScoreInfo, extracted: ScoreInfo) -> ScoreInfo:
     """Prompt for fields not supplied via CLI, using OMR-extracted values as defaults."""
     result = {}
