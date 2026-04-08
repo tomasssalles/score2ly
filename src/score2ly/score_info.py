@@ -1,25 +1,25 @@
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-_FIELDS = [
-    ("title",       "Title"),
-    ("subtitle",    "Subtitle"),
-    ("composer",    "Composer"),
-    ("work_number", "Work number (e.g. Op. 45, BWV 772, K. 331)"),
-    ("copyright",   "Copyright / license"),
-    ("tagline",     "Tagline (shown at the bottom of the last page)"),
-]
+_FIELDS_TO_LABELS = {
+    "title": "Title",
+    "subtitle": "Subtitle",
+    "composer": "Composer",
+    "work_number": "Work number (e.g. Op. 45, BWV 772, K. 331)",
+    "copyright": "Copyright / license",
+    "tagline": "Tagline (shown at the bottom of the last page)",
+}
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ScoreField:
     text: str = ""
     confirmed: bool = False
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ScoreInfo:
     title: ScoreField = field(default_factory=ScoreField)
     subtitle: ScoreField = field(default_factory=ScoreField)
@@ -27,6 +27,9 @@ class ScoreInfo:
     work_number: ScoreField = field(default_factory=ScoreField)
     copyright: ScoreField = field(default_factory=ScoreField)
     tagline: ScoreField = field(default_factory=ScoreField)
+
+
+assert set(f.name for f in fields(ScoreInfo)) == set(_FIELDS_TO_LABELS)
 
 
 def load(path: Path) -> ScoreInfo:
@@ -61,7 +64,7 @@ def collect(cli: ScoreInfo, extracted: ScoreInfo) -> ScoreInfo:
     """Prompt for fields not supplied via CLI, using OMR-extracted values as defaults."""
     result = {}
     queries = []
-    for key, label in _FIELDS:
+    for key, label in _FIELDS_TO_LABELS.items():
         cli_field = getattr(cli, key)
         if cli_field.text:
             text = "" if cli_field.text == "-" else cli_field.text

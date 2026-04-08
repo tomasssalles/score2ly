@@ -26,7 +26,7 @@ class BlockMethod(str, Enum):
     PROJECTION = "projection"
 
 
-@dataclass
+@dataclass(slots=True)
 class _DebugCtx:
     debug_dir: Path | None
     _step: int = field(default=0, init=False)
