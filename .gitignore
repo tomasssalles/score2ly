@@ -16,3 +16,6 @@ build/
 # OS
 .DS_Store
 playground/
+
+# Score bundles
+sample_scores/*.s2l/
