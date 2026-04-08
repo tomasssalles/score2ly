@@ -12,7 +12,6 @@ _STYLE_ATTRS = frozenset({"font-family", "font-size", "font-weight", "font-style
 _GLOBAL_ATTRS_TO_STRIP = _COORD_ATTRS | _STYLE_ATTRS
 
 # Element-specific attribute stripping
-_ACCIDENTAL_ATTRS_TO_STRIP = frozenset({"bracket", "size", "cautionary"})
 _SLUR_ATTRS_TO_STRIP = frozenset({"bezier-x", "bezier-y", "bezier-x2", "bezier-y2", "placement"})
 _PLACEMENT_ELEMENTS = frozenset({"direction", "staccato", "strong-accent", "accent", "tenuto",
                                   "detached-legato", "stressed", "unstressed", "tuplet"})
@@ -52,10 +51,6 @@ def clean(input_path: Path, output_path: Path) -> None:
             el.attrib.pop(attr, None)
 
     # Element-specific cleanup
-    for accidental in root.iter("accidental"):
-        for attr in _ACCIDENTAL_ATTRS_TO_STRIP:
-            accidental.attrib.pop(attr, None)
-
     for sound in root.iter("sound"):
         sound.attrib.pop("dynamics", None)
 
