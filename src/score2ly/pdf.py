@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
 
-from PIL import Image
+import img2pdf
 from pypdf import PdfReader
 
 
@@ -35,10 +35,10 @@ def build_omr_pdf(png_paths: Sequence[Path], output_pdf: Path) -> None:
     Pages are embedded at 300 DPI so Audiveris's rasterization produces
     pixel coordinates that match the source PNGs.
     """
-    pages = [Image.open(p) for p in png_paths]
-    if not pages:
+    if not png_paths:
         raise ValueError("No pages to build PDF from")
-    pages[0].save(output_pdf, "PDF", resolution=_DESIRED_DPI, save_all=True, append_images=pages[1:])
+    layout = img2pdf.get_fixed_dpi_layout_fun(_DESIRED_DPI)
+    output_pdf.write_bytes(img2pdf.convert([str(p) for p in png_paths], layout_fun=layout))
 
 
 def is_vector(pdf_path: Path) -> bool:
