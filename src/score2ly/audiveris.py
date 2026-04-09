@@ -73,5 +73,12 @@ def export_xml(omr_path: Path, work_dir: Path, stage: int) -> Path:
 
     expected = omr_link.with_suffix(".xml")
     if not expected.exists():
-        raise RuntimeError(f"Audiveris export produced no XML output at {expected}")
+        mvt_files = sorted(work_dir.glob(f"{omr_link.stem}.mvt*.xml"))
+        if mvt_files:
+            raise RuntimeError(
+                f"Multi-movement scores are not yet supported. "
+                f"Audiveris exported {len(mvt_files)} movement file(s): "
+                + ", ".join(f.name for f in mvt_files)
+            )
+        raise RuntimeError(f"Audiveris export did not produce the expected XML output file {expected}")
     return expected
