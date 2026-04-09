@@ -25,6 +25,7 @@ from score2ly import (
     pdf,
     score_info,
 )
+from score2ly.pdf import PdfKind
 from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
@@ -334,10 +335,10 @@ def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings, sta
     if settings.preprocessing_is_noop():
         logger.info("Stage %d: No preprocessing operations enabled, skipping.", stage_idx)
         return False
-    if settings.pdf_kind == "vector":
+    if settings.pdf_kind is PdfKind.VECTOR:
         logger.info("Stage %d: Vector PDF, skipping heavy preprocessing.", stage_idx)
         return False
-    if settings.pdf_kind == "scan":
+    if settings.pdf_kind is PdfKind.SCAN:
         logger.info("Stage %d: Scan PDF, running heavy preprocessing.", stage_idx)
         return True
     if pdf.is_vector(source):

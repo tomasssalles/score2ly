@@ -1,13 +1,13 @@
 from dataclasses import dataclass
-from typing import Literal
 
 from score2ly.image_processing import BlockMethod, SheetMethod
+from score2ly.pdf import PdfKind
 
 
 @dataclass(frozen=True, slots=True)
 class ConvertSettings:
     # PDF type
-    pdf_kind: Literal["auto", "vector", "scan"] = "auto"
+    pdf_kind: PdfKind = PdfKind.AUTO
 
     # Image preprocessing (for scans)
     sheet_method: SheetMethod = SheetMethod.NONE

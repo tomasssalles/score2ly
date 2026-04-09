@@ -1,9 +1,16 @@
 import math
 from collections.abc import Sequence
+from enum import Enum
 from pathlib import Path
 
 from PIL import Image
 from pypdf import PdfReader
+
+
+class PdfKind(str, Enum):
+    AUTO = "auto"
+    VECTOR = "vector"
+    SCAN = "scan"
 
 _PDF_POINTS_PER_INCH = 72  # defined by the PDF/PostScript specification
 _DESIRED_DPI = 300

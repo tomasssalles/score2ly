@@ -9,6 +9,7 @@ from importlib.metadata import version
 
 from score2ly import pipeline, metadata
 from score2ly.image_processing import BlockMethod, SheetMethod
+from score2ly.pdf import PdfKind
 from score2ly.settings import ConvertSettings
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def main() -> None:
     score.add_argument("--no-prompt", default=UNSET, action="store_true", help=_with_default("Skip interactive score information prompts and just use OMR-extracted values and any CLI args provided", "no_prompt"))
 
     advanced = settings_parser.add_argument_group("advanced")
-    advanced.add_argument("--pdf-kind", default=UNSET, choices=["auto", "scan", "vector"], help=_with_default("Override PDF type detection", "pdf_kind"))
+    advanced.add_argument("--pdf-kind", default=UNSET, choices=[k.value for k in PdfKind], help=_with_default("Override PDF type detection", "pdf_kind"))
     advanced.add_argument("--sheet-method", default=UNSET, choices=[m.value for m in SheetMethod], help=_with_default("Page isolation method", "sheet_method"))
     advanced.add_argument("--block-method", default=UNSET, choices=[m.value for m in BlockMethod], help=_with_default("Music block detection method", "block_method"))
     advanced.add_argument("--deskew", default=UNSET, action="store_true", help=_with_default("Enable deskew step", "deskew"))
@@ -165,7 +166,9 @@ def _run_pipeline(input_path: Path | None, output_dir: Path, args: argparse.Name
         if value is UNSET:
             continue
 
-        if name == "sheet_method":
+        if name == "pdf_kind":
+            value = PdfKind(value)
+        elif name == "sheet_method":
             value = SheetMethod(value)
         elif name == "block_method":
             value = BlockMethod(value)
