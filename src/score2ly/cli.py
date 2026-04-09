@@ -3,6 +3,7 @@ import logging
 import shutil
 import sys
 from dataclasses import fields
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from importlib.metadata import version
@@ -15,6 +16,18 @@ from score2ly.settings import ConvertSettings
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf"}
+
+
+class _TimestampFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created).astimezone()
+
+        if not dt.strftime("%Z"):
+            dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+
+        return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+
 UNSET = object()
 
 
@@ -76,7 +89,9 @@ def main() -> None:
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     args = parser.parse_args()
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s: %(message)s")
+    handler = logging.StreamHandler()
+    handler.setFormatter(_TimestampFormatter("[%(levelname)s - %(asctime)s] %(message)s"))
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, handlers=[handler])
     logging.getLogger("PIL").setLevel(logging.INFO)
 
     if args.command is None:
