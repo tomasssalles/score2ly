@@ -1,6 +1,7 @@
 import json
 import logging
 import shutil
+import time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -227,16 +228,21 @@ def _run_stage(
         for dep_out_rel_p in dep_outputs
     }
 
+    t0 = time.monotonic()
     stage_outputs = tuple(
         params.fn(stage_output_dir, pipeline_input_path, settings, dependencies_to_outputs, stage_idx)
     )
+    elapsed = time.monotonic() - t0
 
     metadata.update_stage(pipeline_output_dir, params.stage, {
         "description": params.description,
         "outputs": [str(relative(out, pipeline_output_dir)) for out in stage_outputs],
         "source_checksums": source_checksums,
     })
-    logger.info("Stage %d: Done.", stage_idx)
+    if elapsed >= 1.0:
+        logger.info("Stage %d: Done (%.0fs).", stage_idx, elapsed)
+    else:
+        logger.info("Stage %d: Done.", stage_idx)
 
 
 def _copy_original(
