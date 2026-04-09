@@ -77,6 +77,7 @@ def main() -> None:
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s: %(message)s")
+    logging.getLogger("PIL").setLevel(logging.INFO)
 
     if args.command is None:
         parser.print_help()
