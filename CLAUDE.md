@@ -51,3 +51,4 @@ Work **outside-in**: design the interface first with dummy implementations that 
 - Tests live in `tests/`, mirroring the `src/score2ly/` layout
 - Don't add docstrings or comments to code that wasn't changed
 - Don't over-engineer: build exactly what's needed for the current step
+- When asked to commit, include changes done manually, often in other files, often in README.md or .random-notes.md.
