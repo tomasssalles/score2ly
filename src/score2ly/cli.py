@@ -121,6 +121,7 @@ def main() -> None:
     handler.setFormatter(_TimestampFormatter("[%(levelname)s - %(asctime)s] %(message)s"))
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, handlers=[handler])
     logging.getLogger("PIL").setLevel(logging.INFO)
+    logging.getLogger("img2pdf").setLevel(logging.INFO)
 
     if args.command is None:
         parser.print_help()

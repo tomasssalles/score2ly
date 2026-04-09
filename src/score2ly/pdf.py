@@ -37,7 +37,7 @@ def build_omr_pdf(png_paths: Sequence[Path], output_pdf: Path) -> None:
     """
     if not png_paths:
         raise ValueError("No pages to build PDF from")
-    layout = img2pdf.get_fixed_dpi_layout_fun(_DESIRED_DPI)
+    layout = img2pdf.get_fixed_dpi_layout_fun((_DESIRED_DPI, _DESIRED_DPI))
     output_pdf.write_bytes(img2pdf.convert([str(p) for p in png_paths], layout_fun=layout))
 
 
