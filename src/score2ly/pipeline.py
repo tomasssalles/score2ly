@@ -39,21 +39,21 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
     stages: Sequence[_StageParams] = (
         _StageParams(
             stage=Stage.ORIGINAL,
-            description="Copy original score into the .s2l bundle to make it self-contained",
+            description="Copy original score into the .s2l bundle",
             output_dir_name="original",
             dependencies=(),
             fn=_copy_original,
         ),
         _StageParams(
             stage=Stage.PREPROCESS,
-            description="Rasterize PDF pages to grayscale PNGs, with optional targeted processing for OMR",
+            description="Rasterize PDF pages, with optional processing for OMR",
             output_dir_name="pages",
             dependencies=(Stage.ORIGINAL,),
             fn=_preprocess,
         ),
         _StageParams(
             stage=Stage.OMR,
-            description="Run Audiveris OMR per page (for layout coordinates) and once on the full PDF (for MusicXML)",
+            description="Run Audiveris OMR for layout coordinates and MusicXML extraction",
             output_dir_name="audiveris_omr",
             dependencies=(Stage.PREPROCESS,),
             fn=_omr,
@@ -67,42 +67,42 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
         ),
         _StageParams(
             stage=Stage.CLEAN_XML,
-            description="Strip layout and style noise from the MusicXML, keeping only musical content",
+            description="Strip layout and style noise from MusicXML",
             output_dir_name="musicxml_clean",
             dependencies=(Stage.MUSICXML,),
             fn=_clean_musicxml,
         ),
         _StageParams(
             stage=Stage.SCORE_INFO,
-            description="Collect score information (title, composer, work number, copyright, comment)",
+            description="Collect score-header information",
             output_dir_name="score_info",
             dependencies=(Stage.MUSICXML,),
             fn=_collect_score_info,
         ),
         _StageParams(
             stage=Stage.LY_MERGE,
-            description="Convert clean MusicXMLs to a single LilyPond score",
+            description="Convert clean MusicXML to LilyPond",
             output_dir_name="ly_merge",
             dependencies=(Stage.CLEAN_XML, Stage.SCORE_INFO),
             fn=_merge_ly,
         ),
         _StageParams(
             stage=Stage.LY_RENDER,
-            description="Render merged LilyPond score to PDF",
+            description="Render LilyPond score to PDF",
             output_dir_name="ly_render",
             dependencies=(Stage.LY_MERGE,),
             fn=_render_ly,
         ),
         _StageParams(
             stage=Stage.LAYOUT,
-            description="Extract system and measure layout from per-page Audiveris .omr projects",
+            description="Extract system and measure layout from Audiveris .omr projects",
             output_dir_name="layout",
             dependencies=(Stage.OMR,),
             fn=_extract_layout,
         ),
         _StageParams(
             stage=Stage.IMAGES,
-            description="Crop system and measure images from preprocessed page PNGs",
+            description="Crop system and measure images from page PNGs",
             output_dir_name="images",
             dependencies=(Stage.PREPROCESS, Stage.LAYOUT),
             fn=_crop_images,
@@ -116,7 +116,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
         ),
         _StageParams(
             stage=Stage.LY_SNIPPETS,
-            description="Convert per-system MusicXML snippets to LilyPond via musicxml2ly",
+            description="Convert MusicXML snippets to LilyPond",
             output_dir_name="ly_snippets",
             dependencies=(Stage.XML_SNIPPETS,),
             fn=_convert_ly_snippets,
@@ -205,6 +205,8 @@ def _run_stage(
     settings: ConvertSettings,
     stage_idx: int,
 ) -> None:
+    logger.info("* Stage %d: %s", stage_idx, params.description)
+
     stages_meta = metadata.get_stages(pipeline_output_dir)
 
     dependencies_to_outputs: dict[Stage, Sequence[Path]] = {}
