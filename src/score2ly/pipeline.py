@@ -50,7 +50,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
         ),
         _StageParams(
             stage=Stage.OMR,
-            description="Build a PDF from preprocessed page PNGs and run Audiveris OMR, producing a single .omr",
+            description="Run Audiveris OMR per page (for layout coordinates) and once on the full PDF (for MusicXML)",
             output_dir_name="audiveris_omr",
             dependencies=(Stage.PREPROCESS,),
             fn=_omr,
@@ -92,7 +92,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
         ),
         _StageParams(
             stage=Stage.LAYOUT,
-            description="Extract system and measure layout from Audiveris .omr projects",
+            description="Extract system and measure layout from per-page Audiveris .omr projects",
             output_dir_name="layout",
             dependencies=(Stage.OMR,),
             fn=_extract_layout,
@@ -359,11 +359,27 @@ def _omr(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.PREPROCESS]
     )
 
-    logger.info("Stage %d: Building PDF from %d page(s) for Audiveris...", stage_idx, len(page_paths))
-    omr_pdf = stage_output_dir / "pages.pdf"
-    pdf.build_omr_pdf(page_paths, omr_pdf)
+    # Per-page OMR on each PNG directly — pixel coordinates match our PNGs exactly.
+    # Pages that fail (e.g. covers with no staff lines) are skipped gracefully.
+    pages_dir = stage_output_dir / "pages"
+    pages_dir.mkdir()
+    for i, page_path in enumerate(page_paths):
+        page_num = int(page_path.stem.split("_")[-1])
+        logger.info("Stage %d: Per-page OMR on page %d/%d...", stage_idx, i + 1, len(page_paths))
+        try:
+            yield audiveris.run_omr(page_path, pages_dir, stage_idx)
+        except RuntimeError as e:
+            logger.warning(
+                "Stage %d: OMR failed for page %d — no layout data for this page "
+                "(likely a non-musical page such as a cover). PNG: %s. Error: %s",
+                stage_idx, page_num, page_path, e,
+            )
 
-    yield audiveris.run_omr(omr_pdf, stage_output_dir, stage_idx)
+    # Full-score OMR on a combined PDF — gives Audiveris full context for accurate MusicXML.
+    logger.info("Stage %d: Building combined PDF for full-score OMR...", stage_idx)
+    score_pdf = stage_output_dir / "book.pdf"
+    pdf.build_omr_pdf(page_paths, score_pdf)
+    yield audiveris.run_omr(score_pdf, stage_output_dir, stage_idx)
 
 
 def _export_musicxml(
@@ -374,8 +390,12 @@ def _export_musicxml(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    omr_path = pipeline_output_dir / dependencies_to_outputs[Stage.OMR][0]
-    yield audiveris.export_xml(omr_path, stage_output_dir, stage_idx)
+    book_omr = next(
+        pipeline_output_dir / p
+        for p in dependencies_to_outputs[Stage.OMR]
+        if Path(p).name == "book.omr"
+    )
+    yield audiveris.export_xml(book_omr, stage_output_dir, stage_idx)
 
 
 def _clean_musicxml(
@@ -400,20 +420,83 @@ def _extract_layout(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    omr_path = pipeline_output_dir / dependencies_to_outputs[Stage.OMR][0]
 
-    result, _ = omr_layout.extract(omr_path, stage_idx)
+    page_omr_by_num = {
+        int(Path(p).stem.split("_")[-1]): pipeline_output_dir / p
+        for p in dependencies_to_outputs[Stage.OMR]
+        if Path(p).parent.name == "pages"
+    }
+    book_omr = next(
+        pipeline_output_dir / p
+        for p in dependencies_to_outputs[Stage.OMR]
+        if Path(p).name == "book.omr"
+    )
 
+    combined_sheets = []
+    measure_offset = 0
     global_system_id = 0
-    for sheet in result["sheets"]:
-        for system in sheet["systems"]:
-            global_system_id += 1
-            system["local_id"] = system.pop("id")
-            system["global_id"] = global_system_id
+    for page_num, omr_path in sorted(page_omr_by_num.items()):
+        result, measure_offset = omr_layout.extract(omr_path, stage_idx, initial_measure_offset=measure_offset)
+        for sheet in result["sheets"]:
+            sheet["sheet"] = page_num
+            for system in sheet["systems"]:
+                global_system_id += 1
+                system["local_id"] = system.pop("id")
+                system["global_id"] = global_system_id
+            combined_sheets.append(sheet)
+
+    _validate_layout_against_book(combined_sheets, book_omr, stage_output_dir, stage_idx)
 
     dest = stage_output_dir / "layout.json"
-    dest.write_text(json.dumps(result, indent=2))
+    dest.write_text(json.dumps({"sheets": combined_sheets}, indent=2))
     yield dest
+
+
+def _validate_layout_against_book(
+    page_sheets: list[dict],
+    book_omr_path: Path,
+    stage_output_dir: Path,
+    stage_idx: int,
+) -> None:
+    book_result, _ = omr_layout.extract(book_omr_path, stage_idx)
+
+    debug_path = stage_output_dir / "book_layout_debug.json"
+    debug_path.write_text(json.dumps(book_result, indent=2))
+
+    book_by_page = {sheet["sheet"]: sheet for sheet in book_result["sheets"]}
+
+    for page_sheet in page_sheets:
+        page_num = page_sheet["sheet"]
+        book_sheet = book_by_page.get(page_num)
+        if book_sheet is None:
+            raise RuntimeError(
+                f"Stage {stage_idx}: Page {page_num} present in per-page layout but missing from book OMR."
+            )
+
+        page_systems = page_sheet["systems"]
+        book_systems = book_sheet["systems"]
+
+        if len(page_systems) != len(book_systems):
+            raise RuntimeError(
+                f"Stage {stage_idx}: Layout mismatch on page {page_num}: "
+                f"per-page OMR has {len(page_systems)} system(s), book OMR has {len(book_systems)}."
+            )
+
+        for sys_i, (page_sys, book_sys) in enumerate(zip(page_systems, book_systems)):
+            if page_sys["measure_range"] != book_sys["measure_range"]:
+                raise RuntimeError(
+                    f"Stage {stage_idx}: Layout mismatch on page {page_num}, "
+                    f"system {sys_i + 1} (in-page index): "
+                    f"per-page measure range {page_sys['measure_range']} vs book OMR {book_sys['measure_range']}."
+                )
+
+    per_page_nums = {sheet["sheet"] for sheet in page_sheets}
+    for page_num, book_sheet in book_by_page.items():
+        if page_num not in per_page_nums and book_sheet["systems"]:
+            raise RuntimeError(
+                f"Stage {stage_idx}: Page {page_num} is absent from per-page OMR but has "
+                f"{len(book_sheet['systems'])} system(s) in book OMR — expected no musical content."
+            )
 
 
 def _crop_images(

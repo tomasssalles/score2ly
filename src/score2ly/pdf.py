@@ -1,4 +1,3 @@
-import logging
 import math
 from collections.abc import Sequence
 from pathlib import Path
@@ -6,25 +5,21 @@ from pathlib import Path
 from PIL import Image
 from pypdf import PdfReader
 
-logger = logging.getLogger(__name__)
-
+_PDF_POINTS_PER_INCH = 72  # defined by the PDF/PostScript specification
 _DESIRED_DPI = 300
 _AUDIVERIS_PIXEL_LIMIT = 20_000_000
 _PIXEL_TARGET_FACTOR = 0.85  # stay at 85% of the hard limit
 
 
 def page_rasterization_dpi(width_pts: float, height_pts: float) -> int:
-    """Return the DPI to rasterize a page at, capped to keep it under the Audiveris pixel limit."""
-    width_in = width_pts / 72
-    height_in = height_pts / 72
-    limit_dpi = math.floor(math.sqrt(_AUDIVERIS_PIXEL_LIMIT * _PIXEL_TARGET_FACTOR / (width_in * height_in)))
-    if limit_dpi > _DESIRED_DPI:
-        logger.warning(
-            "Page dimensions are unusually small (%.2f x %.2f in)."
-            " Rasterizing at %d DPI may yield too few pixels for reliable OMR.",
-            width_in, height_in, _DESIRED_DPI,
-        )
-    return min(_DESIRED_DPI, limit_dpi)
+    """Return the highest DPI that keeps the rasterized page within the Audiveris pixel limit."""
+    width_in = width_pts / _PDF_POINTS_PER_INCH
+    height_in = height_pts / _PDF_POINTS_PER_INCH
+    area_sq_in = width_in * height_in
+    total_pixels_limit = _AUDIVERIS_PIXEL_LIMIT * _PIXEL_TARGET_FACTOR
+    pixels_per_sq_in_limit = total_pixels_limit / area_sq_in
+    fractional_dpi_limit = math.sqrt(pixels_per_sq_in_limit)
+    return math.floor(fractional_dpi_limit)
 
 
 def build_omr_pdf(png_paths: Sequence[Path], output_pdf: Path) -> None:
