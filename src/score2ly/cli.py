@@ -17,8 +17,23 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf"}
 
+UNSET = object()
+
+_LEVEL_COLORS = {
+    logging.DEBUG:    "\033[2m",    # dim
+    logging.INFO:     "\033[32m",   # green
+    logging.WARNING:  "\033[33m",   # yellow
+    logging.ERROR:    "\033[31m",   # red
+    logging.CRITICAL: "\033[1;31m", # bold red
+}
+_RESET = "\033[0m"
+
 
 class _TimestampFormatter(logging.Formatter):
+    def __init__(self, fmt: str) -> None:
+        super().__init__(fmt)
+        self._use_color = sys.stderr.isatty()
+
     def formatTime(self, record, datefmt=None):
         dt = datetime.fromtimestamp(record.created).astimezone()
 
@@ -27,8 +42,21 @@ class _TimestampFormatter(logging.Formatter):
 
         return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
 
+    def format(self, record):
+        msg = super().format(record)
 
-UNSET = object()
+        if not self._use_color:
+            return msg
+
+        color = _LEVEL_COLORS.get(record.levelno, "")
+        if color and msg.startswith("["):
+            if record.levelno == logging.DEBUG:
+                reset_pos = len(msg)
+            else:
+                reset_pos = msg.index("]") + 1
+            return f"{color}{msg[:reset_pos]}{_RESET}{msg[reset_pos:]}"
+
+        return msg
 
 
 def main() -> None:
