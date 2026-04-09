@@ -3,6 +3,7 @@ import logging
 import shutil
 import time
 from collections.abc import Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -366,27 +367,35 @@ def _omr(
         pipeline_output_dir / p for p in dependencies_to_outputs[Stage.PREPROCESS]
     )
 
-    # Per-page OMR on each PNG directly — pixel coordinates match our PNGs exactly.
-    # Pages that fail (e.g. covers with no staff lines) are skipped gracefully.
-    pages_dir = stage_output_dir / "pages"
-    pages_dir.mkdir()
-    for i, page_path in enumerate(page_paths):
-        page_num = int(page_path.stem.split("_")[-1])
-        logger.info("Stage %d: Per-page OMR on page %d/%d...", stage_idx, i + 1, len(page_paths))
-        try:
-            yield audiveris.run_omr(page_path, pages_dir, stage_idx)
-        except RuntimeError as e:
-            logger.warning(
-                "Stage %d: OMR failed for page %d — no layout data for this page "
-                "(likely a non-musical page such as a cover). PNG: %s. Error: %s",
-                stage_idx, page_num, page_path, e,
-            )
-
-    # Full-score OMR on a combined PDF — gives Audiveris full context for accurate MusicXML.
+    # Build the combined PDF first so the book OMR can start immediately.
     logger.info("Stage %d: Building combined PDF for full-score OMR...", stage_idx)
     score_pdf = stage_output_dir / "book.pdf"
     pdf.build_omr_pdf(page_paths, score_pdf)
-    yield audiveris.run_omr(score_pdf, stage_output_dir, stage_idx)
+
+    pages_dir = stage_output_dir / "pages"
+    pages_dir.mkdir()
+
+    # Run book OMR and all per-page OMRs concurrently.
+    logger.info("Stage %d: Running OMR on %d page(s) + full score in parallel...", stage_idx, len(page_paths))
+    with ThreadPoolExecutor() as executor:
+        book_future: Future[Path] = executor.submit(audiveris.run_omr, score_pdf, stage_output_dir, stage_idx)
+        page_futures: dict[Future[Path], Path] = {
+            executor.submit(audiveris.run_omr, page_path, pages_dir, stage_idx): page_path
+            for page_path in page_paths
+        }
+
+    for future, page_path in page_futures.items():
+        page_num = int(page_path.stem.split("_")[-1])
+        try:
+            yield future.result()
+        except RuntimeError as e:
+            logger.warning(
+                "Stage %d: OMR failed for page %d — no layout data for this page "
+                "(hopefully a non-musical page such as a cover). PNG: %s. Error: %s",
+                stage_idx, page_num, page_path, e,
+            )
+
+    yield book_future.result()
 
 
 def _export_musicxml(

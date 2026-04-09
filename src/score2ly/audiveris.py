@@ -57,6 +57,8 @@ def run_omr(input_path: Path, work_dir: Path, stage: int) -> Path:
     expected = work_dir / f"{input_path.stem}.omr"
     if not expected.exists():
         raise RuntimeError(f"Audiveris ran but produced no .omr output at {expected}")
+
+    logger.info("Stage %d: Finished OMR run %s -> %s", stage, input_path.name, expected.name)
     return expected
 
 
