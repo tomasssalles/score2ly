@@ -50,26 +50,31 @@ def _run_audiveris(extra_args: list[str], work_dir: Path, stage: int, identifier
         raise RuntimeError(f"Audiveris {identifier} failed (exit code {result.returncode}). {log_hint}")
 
 
-def run_omr(input_path: Path, work_dir: Path, stage: int) -> Path:
-    logger.info("Stage %d: Running Audiveris OMR on %s...", stage, input_path.name)
+def run_omr(input_path: Path, work_dir: Path, stage: int, bundle_root: Path) -> Path:
+    logger.info("Stage %d: Running Audiveris OMR on %s...", stage, input_path.relative_to(bundle_root, walk_up=True))
     _run_audiveris(["-transcribe", "-save", str(input_path)], work_dir, stage, "OMR transcription")
 
     expected = work_dir / f"{input_path.stem}.omr"
     if not expected.exists():
         raise RuntimeError(f"Audiveris ran but produced no .omr output at {expected}")
 
-    logger.info("Stage %d: Finished OMR run %s -> %s", stage, input_path.name, expected.name)
+    logger.info(
+        "Stage %d: Finished OMR run %s -> %s",
+        stage,
+        input_path.relative_to(bundle_root, walk_up=True),
+        expected.relative_to(bundle_root, walk_up=True),
+    )
     return expected
 
 
-def export_xml(omr_path: Path, work_dir: Path, stage: int) -> Path:
+def export_xml(omr_path: Path, work_dir: Path, stage: int, bundle_root: Path) -> Path:
     # Audiveris ignores -output for existing .omr books and writes the export next
     # to the input file. Symlink the .omr into work_dir so output lands there.
     omr_link = work_dir / omr_path.name
     work_dir.mkdir(parents=True, exist_ok=True)
     omr_link.symlink_to(omr_path.relative_to(omr_link.parent, walk_up=True))
 
-    logger.info("Stage %d: Exporting MusicXML from %s...", stage, omr_path.name)
+    logger.info("Stage %d: Exporting MusicXML from %s...", stage, omr_path.relative_to(bundle_root, walk_up=True))
     extra_args = ["-export", "-constant", "org.audiveris.omr.sheet.BookManager.useCompression=false", str(omr_link)]
     _run_audiveris(extra_args, work_dir, stage, "MusicXML export")
 

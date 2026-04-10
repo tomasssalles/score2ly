@@ -278,14 +278,14 @@ def _copy_original(
             writer.write(f)
         logger.info(
             "Stage %d: Extracted pages %d-%d from %s into the .s2l bundle (%s)",
-            stage_idx, start, end, pipeline_input_path, dest,
+            stage_idx, start, end, pipeline_input_path, relative(dest, stage_output_dir.parent),
         )
     else:
         dest = stage_output_dir / f"original{pipeline_input_path.suffix}"
         shutil.copy2(pipeline_input_path, dest)
         logger.info(
             "Stage %d: Copied the original score %s into the .s2l bundle (%s)",
-            stage_idx, pipeline_input_path, dest,
+            stage_idx, pipeline_input_path, relative(dest, stage_output_dir.parent),
         )
 
     yield dest
@@ -354,6 +354,7 @@ def _preprocess(
                 projection_k=settings.projection_k,
                 projection_denoise=settings.projection_denoise,
                 debug_dir=debug_dir_i,
+                bundle_root=pipeline_output_dir,
             )
 
         page_path = stage_output_dir / f"page_{i + 1:04d}.png"
@@ -401,9 +402,9 @@ def _omr(
     # Run book OMR and all per-page OMRs concurrently.
     logger.info("Stage %d: Running OMR on %d page(s) + full score in parallel...", stage_idx, len(page_paths))
     with ThreadPoolExecutor() as executor:
-        book_future: Future[Path] = executor.submit(audiveris.run_omr, score_pdf, stage_output_dir, stage_idx)
+        book_future: Future[Path] = executor.submit(audiveris.run_omr, score_pdf, stage_output_dir, stage_idx, pipeline_output_dir)
         page_futures: dict[Future[Path], Path] = {
-            executor.submit(audiveris.run_omr, page_path, pages_dir, stage_idx): page_path
+            executor.submit(audiveris.run_omr, page_path, pages_dir, stage_idx, pipeline_output_dir): page_path
             for page_path in page_paths
         }
 
@@ -415,7 +416,7 @@ def _omr(
             logger.warning(
                 "Stage %d: OMR failed for page %d — no layout data for this page "
                 "(hopefully a non-musical page such as a cover). PNG: %s. Error: %s",
-                stage_idx, page_num, page_path, e,
+                stage_idx, page_num, relative(page_path, pipeline_output_dir), e,
             )
 
     yield book_future.result()
@@ -434,7 +435,7 @@ def _export_musicxml(
         for p in dependencies_to_outputs[Stage.OMR]
         if Path(p).name == "book.omr"
     )
-    yield audiveris.export_xml(book_omr, stage_output_dir, stage_idx)
+    yield audiveris.export_xml(book_omr, stage_output_dir, stage_idx, pipeline_output_dir)
 
 
 def _clean_musicxml(

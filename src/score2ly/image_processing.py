@@ -29,6 +29,7 @@ class BlockMethod(str, Enum):
 @dataclass(slots=True)
 class _DebugCtx:
     debug_dir: Path | None
+    bundle_root: Path
     _step: int = field(default=0, init=False)
 
     def save(self, name: str, img: np.ndarray) -> None:
@@ -37,7 +38,7 @@ class _DebugCtx:
         self._step += 1
         filename = self.debug_dir / f"{self._step:02d}_{name}.png"
         cv2.imwrite(str(filename), img)
-        logger.debug("saved debug image %s", filename.name)
+        logger.debug("Saved debug image %s", filename.relative_to(self.bundle_root, walk_up=True))
 
 
 def _to_bgr(gray: np.ndarray) -> np.ndarray:
@@ -52,7 +53,7 @@ def _crop_to_main_sheet_cc(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray:
     inv = 255 - bw
 
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(inv, connectivity=8)
-    logger.debug("[cc] image %dx%d, components: %d", w, h, num_labels - 1)
+    logger.debug("[cc] Image %dx%d, components: %d", w, h, num_labels - 1)
 
     page_idx = None
     max_area = 0
@@ -62,9 +63,9 @@ def _crop_to_main_sheet_cc(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray:
             continue
         touches_all = x == 0 and y == 0 and x + ww >= w and y + hh >= h
         if touches_all:
-            logger.debug("[cc] component %d: skipped (touches all borders)", i)
+            logger.debug("[cc] Component %d: skipped (touches all borders)", i)
             continue
-        logger.debug("[cc] component %d: x=%d y=%d w=%d h=%d area=%.1f%%", i, x, y, ww, hh, area / (w * h) * 100)
+        logger.debug("[cc] Component %d: x=%d y=%d w=%d h=%d area=%.1f%%", i, x, y, ww, hh, area / (w * h) * 100)
         if area > max_area:
             max_area = area
             page_idx = i
@@ -80,11 +81,11 @@ def _crop_to_main_sheet_cc(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray:
         ctx.save("crop_to_main_sheet_cc_candidates", vis)
 
     if page_idx is None:
-        logger.debug("[cc] no suitable component, returning full image")
+        logger.debug("[cc] No suitable component, returning full image")
         return gray
 
     x, y, ww, hh, _ = stats[page_idx]
-    logger.debug("[cc] selected: x=%d y=%d w=%d h=%d", x, y, ww, hh)
+    logger.debug("[cc] Selected: x=%d y=%d w=%d h=%d", x, y, ww, hh)
 
     x0 = max(0, x)
     y0 = max(0, y)
@@ -108,7 +109,7 @@ def _crop_to_main_sheet_flood_fill(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarr
             cv2.floodFill(filled, ff_mask, (seed_x, seed_y), 128)
             filled_from.append((seed_x, seed_y))
 
-    logger.debug("[flood_fill] filled from corners: %s", filled_from)
+    logger.debug("[flood_fill] Filled from corners: %s", filled_from)
 
     page_mask = (filled == 255).astype(np.uint8)
     coords = np.column_stack(np.where(page_mask))
@@ -120,12 +121,12 @@ def _crop_to_main_sheet_flood_fill(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarr
         ctx.save("crop_to_main_sheet_flood_fill_mask", vis)
 
     if len(coords) == 0:
-        logger.debug("[flood_fill] no page region found, returning full image")
+        logger.debug("[flood_fill] No page region found, returning full image")
         return gray
 
     y0, x0 = coords.min(axis=0)
     y1, x1 = coords.max(axis=0)
-    logger.debug("[flood_fill] page bbox: x=%d..%d y=%d..%d", x0, x1, y0, y1)
+    logger.debug("[flood_fill] Page bbox: x=%d..%d y=%d..%d", x0, x1, y0, y1)
 
     if ctx.debug_dir is not None:
         vis = _to_bgr(gray)
@@ -147,12 +148,12 @@ def _crop_to_main_sheet_largest_contour(gray: np.ndarray, ctx: _DebugCtx) -> np.
         blur_size += 1
     blurred = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
     _, coarse = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    logger.debug("[largest_contour] blur kernel: %dx%d", blur_size, blur_size)
+    logger.debug("[largest_contour] Blur kernel: %dx%d", blur_size, blur_size)
 
     ctx.save("crop_to_main_sheet_largest_contour_coarse", coarse)
 
     contours, _ = cv2.findContours(coarse, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    logger.debug("[largest_contour] image %dx%d, contours: %d", w, h, len(contours))
+    logger.debug("[largest_contour] Image %dx%d, contours: %d", w, h, len(contours))
 
     vis = _to_bgr(gray) if ctx.debug_dir is not None else None
     best = None
@@ -162,11 +163,11 @@ def _crop_to_main_sheet_largest_contour(gray: np.ndarray, ctx: _DebugCtx) -> np.
         area = ww * hh
         touches_all = x == 0 and y == 0 and x + ww >= w and y + hh >= h
         if touches_all:
-            logger.debug("[largest_contour] skipped (touches all borders): %dx%d", ww, hh)
+            logger.debug("[largest_contour] Skipped (touches all borders): %dx%d", ww, hh)
             if vis is not None:
                 cv2.rectangle(vis, (x, y), (x + ww, y + hh), (0, 0, 128), 1)
             continue
-        logger.debug("[largest_contour] candidate: x=%d y=%d w=%d h=%d area=%.1f%%", x, y, ww, hh, area / (w * h) * 100)
+        logger.debug("[largest_contour] Candidate: x=%d y=%d w=%d h=%d area=%.1f%%", x, y, ww, hh, area / (w * h) * 100)
         if vis is not None:
             cv2.rectangle(vis, (x, y), (x + ww, y + hh), (255, 165, 0), 2)
         if area > best_area:
@@ -174,13 +175,13 @@ def _crop_to_main_sheet_largest_contour(gray: np.ndarray, ctx: _DebugCtx) -> np.
             best = (x, y, ww, hh)
 
     if best is None:
-        logger.debug("[largest_contour] no suitable contour, returning full image")
+        logger.debug("[largest_contour] No suitable contour, returning full image")
         if vis is not None:
             ctx.save("crop_to_main_sheet_largest_contour_candidates", vis)
         return gray
 
     x, y, ww, hh = best
-    logger.debug("[largest_contour] selected: x=%d y=%d w=%d h=%d (%.1f%%)", x, y, ww, hh, best_area / (w * h) * 100)
+    logger.debug("[largest_contour] Selected: x=%d y=%d w=%d h=%d (%.1f%%)", x, y, ww, hh, best_area / (w * h) * 100)
     if vis is not None:
         cv2.rectangle(vis, (x, y), (x + ww, y + hh), (0, 255, 0), 3)
         ctx.save("crop_to_main_sheet_largest_contour_candidates", vis)
@@ -202,7 +203,7 @@ def _crop_to_music_block_contour(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray
     opened = cv2.morphologyEx(inv, cv2.MORPH_OPEN, kernel, iterations=1)
 
     contours, _ = cv2.findContours(opened, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    logger.debug("[block_contour] image %dx%d, contours: %d", w, h, len(contours))
+    logger.debug("[block_contour] Image %dx%d, contours: %d", w, h, len(contours))
 
     if not contours:
         return gray
@@ -226,7 +227,7 @@ def _crop_to_music_block_contour(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray
                 cv2.rectangle(vis, (x, y), (x + ww, y + hh), (0, 0, 128), 1)
             continue
 
-        logger.debug("[block_contour] candidate: x=%d y=%d w=%d h=%d area=%.1f%% aspect=%.2f", x, y, ww, hh, frac * 100, aspect)
+        logger.debug("[block_contour] Candidate: x=%d y=%d w=%d h=%d area=%.1f%% aspect=%.2f", x, y, ww, hh, frac * 100, aspect)
         if vis is not None:
             cv2.rectangle(vis, (x, y), (x + ww, y + hh), (255, 165, 0), 2)
         if score > candidate_score:
@@ -234,13 +235,13 @@ def _crop_to_music_block_contour(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray
             candidate = (x, y, ww, hh)
 
     if candidate is None:
-        logger.debug("[block_contour] no suitable contour, returning full image")
+        logger.debug("[block_contour] No suitable contour, returning full image")
         if vis is not None:
             ctx.save("crop_to_music_block_contour_candidates", vis)
         return gray
 
     x, y, ww, hh = candidate
-    logger.debug("[block_contour] selected: x=%d y=%d w=%d h=%d", x, y, ww, hh)
+    logger.debug("[block_contour] Selected: x=%d y=%d w=%d h=%d", x, y, ww, hh)
     if vis is not None:
         cv2.rectangle(vis, (x, y), (x + ww, y + hh), (0, 255, 0), 3)
         ctx.save("crop_to_music_block_contour_candidates", vis)
@@ -318,12 +319,12 @@ def _crop_to_music_block_projection(gray: np.ndarray, ctx: _DebugCtx, k: float, 
     content_cols = np.where(v_proj >= min_ink)[0]
 
     if len(content_rows) == 0 or len(content_cols) == 0:
-        logger.debug("[block_projection] no content found, returning full image")
+        logger.debug("[block_projection] No content found, returning full image")
         return gray
 
     outer_y0, outer_y1 = int(content_rows[0]), int(content_rows[-1])
     outer_x0, outer_x1 = int(content_cols[0]), int(content_cols[-1])
-    logger.debug("[block_projection] outer bbox: x=%d..%d y=%d..%d", outer_x0, outer_x1, outer_y0, outer_y1)
+    logger.debug("[block_projection] Outer bbox: x=%d..%d y=%d..%d", outer_x0, outer_x1, outer_y0, outer_y1)
 
     inner_y0 = _find_gap_inward(h_proj, outer_y0, outer_y1, 1, min_ink)
     inner_y1 = _find_gap_inward(h_proj, outer_y1, outer_y0, -1, min_ink)
@@ -331,9 +332,9 @@ def _crop_to_music_block_projection(gray: np.ndarray, ctx: _DebugCtx, k: float, 
     inner_x1 = _find_gap_inward(v_proj, outer_x1, outer_x0, -1, min_ink)
 
     if (inner_y0, inner_y1, inner_x0, inner_x1) != (outer_y0, outer_y1, outer_x0, outer_x1):
-        logger.debug("[block_projection] inner bbox (border stripped): x=%d..%d y=%d..%d", inner_x0, inner_x1, inner_y0, inner_y1)
+        logger.debug("[block_projection] Inner bbox (border stripped): x=%d..%d y=%d..%d", inner_x0, inner_x1, inner_y0, inner_y1)
     else:
-        logger.debug("[block_projection] no inner gap found, using outer bbox")
+        logger.debug("[block_projection] No inner gap found, using outer bbox")
 
     if ctx.debug_dir is not None:
         vis = _to_bgr(gray)
@@ -467,14 +468,15 @@ def process_page(
     projection_k: float,
     projection_denoise: bool,
     debug_dir: Path | None,
+    bundle_root: Path,
 ) -> np.ndarray:
-    ctx = _DebugCtx(debug_dir)
+    ctx = _DebugCtx(debug_dir, bundle_root)
     ctx.save("input_grayscale", gray)
 
     step = gray
 
     if sheet_method is not SheetMethod.NONE:
-        logger.info("  step 1: crop to main sheet [%s]", sheet_method.value)
+        logger.info("  Step 1: crop to main sheet [%s]", sheet_method.value)
         if sheet_method is SheetMethod.CC:
             step = _crop_to_main_sheet_cc(step, ctx)
         elif sheet_method is SheetMethod.FLOOD_FILL:
@@ -483,23 +485,23 @@ def process_page(
             step = _crop_to_main_sheet_largest_contour(step, ctx)
 
     if block_method is not BlockMethod.NONE:
-        logger.info("  step 2: crop to music block [%s]", block_method.value)
+        logger.info("  Step 2: crop to music block [%s]", block_method.value)
         if block_method is BlockMethod.CONTOUR:
             step = _crop_to_music_block_contour(step, ctx)
         elif block_method is BlockMethod.PROJECTION:
             step = _crop_to_music_block_projection(step, ctx, k=projection_k, denoise=projection_denoise)
 
     if deskew:
-        logger.info("  step 3: deskew")
+        logger.info("  Step 3: deskew")
         step, angle, method = _deskew_staff_based(step, ctx)
-        logger.info("  deskew: %.3f° (%s)", angle, method)
+        logger.info("  Deskew: %.3f° (%s)", angle, method)
 
     if tight_crop:
-        logger.info("  step 4: tight crop")
+        logger.info("  Step 4: tight crop")
         step = _tight_crop(step, ctx)
 
     if clahe:
-        logger.info("  step 5: enhance contrast (CLAHE)")
+        logger.info("  Step 5: enhance contrast (CLAHE)")
         step = _enhance_contrast(step)
 
     ctx.save("final", step)
