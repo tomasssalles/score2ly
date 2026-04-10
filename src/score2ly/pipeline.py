@@ -35,6 +35,7 @@ from score2ly.utils import relative
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyTypeChecker
 def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) -> None:
     stages: Sequence[_StageParams] = (
         _StageParams(
@@ -42,7 +43,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
             description="Copy original score into the .s2l bundle",
             output_dir_name="original",
             dependencies=(),
-            fn=_copy_original,
+            fn=lambda *a, **kw: _copy_original(input_path, *a, **kw),
         ),
         _StageParams(
             stage=Stage.PREPROCESS,
@@ -124,14 +125,13 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
     )
 
     for stage_idx, params in enumerate(stages, start=1):
-        _run_stage(params, input_path, output_dir, settings, stage_idx)
+        _run_stage(params, output_dir, settings, stage_idx)
 
 
 class _StageFn(Protocol):
     def __call__(
         self,
         stage_output_dir: Path,
-        pipeline_input_path: Path | None,
         settings: ConvertSettings,
         dependencies_to_outputs: dict[Stage, Sequence[Path]],
         stage_idx: int,
@@ -200,7 +200,6 @@ def _should_run(
 
 def _run_stage(
     params: _StageParams,
-    pipeline_input_path: Path | None,
     pipeline_output_dir: Path,
     settings: ConvertSettings,
     stage_idx: int,
@@ -233,7 +232,7 @@ def _run_stage(
 
     t0 = time.monotonic()
     stage_outputs = tuple(
-        params.fn(stage_output_dir, pipeline_input_path, settings, dependencies_to_outputs, stage_idx)
+        params.fn(stage_output_dir, settings, dependencies_to_outputs, stage_idx)
     )
     elapsed = time.monotonic() - t0
 
@@ -249,8 +248,8 @@ def _run_stage(
 
 
 def _copy_original(
-    stage_output_dir: Path,
     pipeline_input_path: Path | None,
+    stage_output_dir: Path,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -293,14 +292,13 @@ def _copy_original(
 
 def _collect_score_info(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
 ) -> Iterable[Path]:
     logger.info("Stage %d: Collecting score information...", stage_idx)
     pipeline_output_dir = stage_output_dir.parent
-    first_xml = sorted(pipeline_output_dir / p for p in dependencies_to_outputs[Stage.MUSICXML])[0]
+    first_xml = pipeline_output_dir / min(dependencies_to_outputs[Stage.MUSICXML])
     extracted = score_info.extract_from_xml(first_xml)
     cli = score_info.ScoreInfo(
         title=score_info.ScoreField(text=settings.title),
@@ -321,7 +319,6 @@ def _collect_score_info(
 
 def _preprocess(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -381,7 +378,6 @@ def _should_run_heavy_preprocessing(source: Path, settings: ConvertSettings, sta
 
 def _omr(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -424,7 +420,6 @@ def _omr(
 
 def _export_musicxml(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -440,7 +435,6 @@ def _export_musicxml(
 
 def _clean_musicxml(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -454,7 +448,6 @@ def _clean_musicxml(
 
 def _extract_layout(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -541,7 +534,6 @@ def _validate_layout_against_book(
 
 def _crop_images(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -576,7 +568,6 @@ def _crop_images(
 
 def _extract_xml_snippets(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -599,7 +590,6 @@ def _extract_xml_snippets(
 
 def _merge_ly(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -623,7 +613,6 @@ def _merge_ly(
 
 def _render_ly(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
@@ -644,7 +633,6 @@ def _render_ly(
 
 def _convert_ly_snippets(
     stage_output_dir: Path,
-    pipeline_input_path: Path | None,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
