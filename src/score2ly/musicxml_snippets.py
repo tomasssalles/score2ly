@@ -34,21 +34,25 @@ def extract_snippets(
         prev_last: int | None = None
 
         for sys_i, (system, (first_num, last_num)) in enumerate(zip(sorted_systems, sys_ranges)):
-            # Advance past any gap between previous system and this one, collecting attrs
-            gap_start = prev_last + 1 if prev_last is not None else first_num
-            for gap_num in range(gap_start, first_num):
-                m = next(measure_iter)
-                if int(m.attrib["number"]) != gap_num:
-                    raise ValueError(
-                        f"Part {part_id}: expected measure {gap_num}, got {m.attrib['number']}"
-                    )
-                _update_attrs(current_attrs, m)
+            if prev_last is not None and first_num != prev_last + 1:
+                prev_global_id = sorted_systems[sys_i - 1]["global_id"]
+                raise ValueError(
+                    f"Part {part_id}: gap in system layout — system {system['global_id']} starts"
+                    f" at measure {first_num} but system {prev_global_id} ended at {prev_last}."
+                    f" Layout and XML are out of sync."
+                )
 
             system_carried[sys_i][part_id] = dict(current_attrs)
 
             measures = []
             for expected_num in range(first_num, last_num + 1):
-                m = next(measure_iter)
+                try:
+                    m = next(measure_iter)
+                except StopIteration:
+                    raise ValueError(
+                        f"Part {part_id}: XML ran out of measures before measure {expected_num}."
+                        f" The XML has fewer measures than the layout extracted from the PDF."
+                    )
                 if int(m.attrib["number"]) != expected_num:
                     raise ValueError(
                         f"Part {part_id}: expected measure {expected_num}, got {m.attrib['number']}"
