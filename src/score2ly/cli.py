@@ -32,6 +32,16 @@ def _parse_page_range(s: str) -> tuple[int, int]:
         raise argparse.ArgumentTypeError(f"End page must be >= start ({start}), got: {end}")
     return (start, end)
 
+
+def _validate_xml_path(path: Path) -> None:
+    if not path.exists():
+        logger.error("XML file not found: %s", path)
+        sys.exit(1)
+    if path.suffix.lower() != ".xml":
+        logger.error("Expected a .xml file, got: %s", path)
+        sys.exit(1)
+
+
 UNSET = object()
 
 _LEVEL_COLORS = {
@@ -115,11 +125,14 @@ def main() -> None:
     advanced.add_argument("--projection-k", default=UNSET, type=float, metavar="K", help=_with_default("Ink threshold = mean - K*std for projection method", "projection_k"))
     advanced.add_argument("--projection-denoise", default=UNSET, action="store_true", help=_with_default("Enable morphological denoising in projection step", "projection_denoise"))
 
+    xml_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    xml_parser.add_argument("--xml", type=Path, default=None, metavar="FILE", help="Use this MusicXML file instead of running Audiveris OMR export")
+
     # 'new' subcommand
-    new = subparsers.add_parser("new", parents=[common, settings_parser], help="Create a new .s2l bundle from a score file.")
+    new = subparsers.add_parser("new", parents=[common, settings_parser, xml_parser], help="Create a new .s2l bundle from a score file.")
     new.set_defaults(func=_new)
 
-    new.add_argument("input", type=Path, help="Input score file")
+    new.add_argument("input_pdf", type=Path, help="Input score file")
     output_group = new.add_mutually_exclusive_group()
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (bundle name is derived automatically) (default: input file's directory)")
@@ -127,12 +140,13 @@ def main() -> None:
     new.add_argument("--page-range", type=_parse_page_range, default=None, metavar="START-END", help="Only convert pages START through END (1-indexed, inclusive)")
 
     # 'update' subcommand
-    update = subparsers.add_parser("update", parents=[common, settings_parser], help="Partially re-run the pipeline on a .s2l bundle after manual edits.")
+    update = subparsers.add_parser("update", parents=[common, settings_parser, xml_parser], help="Partially re-run the pipeline on a .s2l bundle after manual edits.")
     update.set_defaults(func=_update)
 
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     args = parser.parse_args()
+
     handler = logging.StreamHandler()
     handler.setFormatter(_TimestampFormatter("[%(levelname)s - %(asctime)s] %(message)s"))
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, handlers=[handler])
@@ -147,18 +161,22 @@ def main() -> None:
 
 
 def _new(args: argparse.Namespace) -> None:
-    input_path = args.input
-    if not input_path.exists():
-        logger.error("Input file not found: %s", input_path)
+    input_pdf_path = args.input_pdf
+    if not input_pdf_path.exists():
+        logger.error("Input file not found: %s", input_pdf_path)
         sys.exit(1)
 
-    if input_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+    if input_pdf_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         logger.error(
             "Unsupported input format '%s'. Supported: %s",
-            input_path.suffix,
+            input_pdf_path.suffix,
             sorted(SUPPORTED_EXTENSIONS),
         )
         sys.exit(1)
+
+    input_xml_path = args.xml
+    if input_xml_path is not None:
+        _validate_xml_path(input_xml_path)
 
     if args.output is not None:
         if args.output.suffix != ".s2l":
@@ -169,9 +187,9 @@ def _new(args: argparse.Namespace) -> None:
         if not args.directory.is_dir():
             logger.error("Directory not found: %s", args.directory)
             sys.exit(1)
-        output_dir = args.directory / input_path.with_suffix(".s2l").name
+        output_dir = args.directory / input_pdf_path.with_suffix(".s2l").name
     else:
-        output_dir = input_path.with_suffix(".s2l")
+        output_dir = input_pdf_path.with_suffix(".s2l")
 
     if args.overwrite:
         if not output_dir.exists():
@@ -187,10 +205,10 @@ def _new(args: argparse.Namespace) -> None:
 
     output_dir.mkdir()
 
-    logger.info("Processing: %s", input_path)
+    logger.info("Processing: %s", input_pdf_path)
     logger.info("Output directory: %s", output_dir)
-    metadata.create(output_dir, sys.argv, Path.cwd(), input_path, args.page_range)
-    _run_pipeline(input_path, output_dir, args)
+    metadata.create(output_dir, sys.argv, Path.cwd(), input_pdf_path, args.page_range)
+    _run_pipeline(input_pdf_path, input_xml_path, output_dir, args)
 
 
 def _update(args: argparse.Namespace) -> None:
@@ -209,6 +227,10 @@ def _update(args: argparse.Namespace) -> None:
         logger.error("--page-range can only be used with 'new', not 'update'.")
         sys.exit(1)
 
+    input_xml_path = args.xml
+    if input_xml_path is not None:
+        _validate_xml_path(input_xml_path)
+
     maybe_ignored_args = [f.name for f in fields(ConvertSettings) if getattr(args, f.name, UNSET) is not UNSET]
     if maybe_ignored_args:
         print()
@@ -219,10 +241,15 @@ def _update(args: argparse.Namespace) -> None:
         print()
 
     logger.info("Updating bundle: %s", output_dir)
-    _run_pipeline(None, output_dir, args)
+    _run_pipeline(None, input_xml_path, output_dir, args)
 
 
-def _run_pipeline(input_path: Path | None, output_dir: Path, args: argparse.Namespace) -> None:
+def _run_pipeline(
+    input_pdf_path: Path | None,
+    input_xml_path: Path | None,
+    output_dir: Path,
+    args: argparse.Namespace,
+) -> None:
     settings_kwargs = {}
     for field in fields(ConvertSettings):
         name = field.name
@@ -239,11 +266,10 @@ def _run_pipeline(input_path: Path | None, output_dir: Path, args: argparse.Name
             value = BlockMethod(value)
 
         settings_kwargs[name] = value
-
     settings = ConvertSettings(**settings_kwargs)
 
     try:
-        pipeline.run(input_path, output_dir, settings)
+        pipeline.run(input_pdf_path, input_xml_path, output_dir, settings)
     except ValueError:
         logger.exception("Oops, something went wrong.")
         sys.exit(2)

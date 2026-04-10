@@ -36,14 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 # noinspection PyTypeChecker
-def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) -> None:
+def run(input_pdf_path: Path | None, input_xml_path: Path | None, output_dir: Path, settings: ConvertSettings) -> None:
     stages: Sequence[_StageParams] = (
         _StageParams(
             stage=Stage.ORIGINAL,
             description="Copy original score into the .s2l bundle",
             output_dir_name="original",
             dependencies=(),
-            fn=lambda *a, **kw: _copy_original(input_path, *a, **kw),
+            fn=lambda *a, **kw: _copy_original(input_pdf_path, *a, **kw),
         ),
         _StageParams(
             stage=Stage.PREPROCESS,
@@ -64,7 +64,7 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
             description="Export MusicXML from the Audiveris .omr project",
             output_dir_name="musicxml",
             dependencies=(Stage.OMR,),
-            fn=_export_musicxml,
+            fn=lambda *a, **kw: _export_musicxml(input_xml_path, *a, **kw),
         ),
         _StageParams(
             stage=Stage.CLEAN_XML,
@@ -123,6 +123,10 @@ def run(input_path: Path | None, output_dir: Path, settings: ConvertSettings) ->
             fn=_convert_ly_snippets,
         ),
     )
+
+    if input_xml_path is not None:
+        for out in metadata.get_stages(output_dir).get(Stage.MUSICXML, {}).get("outputs", []):
+            (output_dir / out).unlink(missing_ok=True)
 
     for stage_idx, params in enumerate(stages, start=1):
         _run_stage(params, output_dir, settings, stage_idx)
@@ -419,18 +423,29 @@ def _omr(
 
 
 def _export_musicxml(
+    input_xml_path: Path | None,
     stage_output_dir: Path,
     settings: ConvertSettings,
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    book_omr = next(
-        pipeline_output_dir / p
-        for p in dependencies_to_outputs[Stage.OMR]
-        if Path(p).name == "book.omr"
-    )
-    yield audiveris.export_xml(book_omr, stage_output_dir, stage_idx, pipeline_output_dir)
+
+    if input_xml_path is not None:
+        dest = stage_output_dir / input_xml_path.name
+        shutil.copy2(input_xml_path, dest)
+        logger.info(
+            "Stage %d: Copied user-provided MusicXML %s into the .s2l bundle (%s)",
+            stage_idx, input_xml_path, relative(dest, pipeline_output_dir),
+        )
+        yield dest
+    else:
+        book_omr = next(
+            pipeline_output_dir / p
+            for p in dependencies_to_outputs[Stage.OMR]
+            if Path(p).name == "book.omr"
+        )
+        yield audiveris.export_xml(book_omr, stage_output_dir, stage_idx, pipeline_output_dir)
 
 
 def _clean_musicxml(
