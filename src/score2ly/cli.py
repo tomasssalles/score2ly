@@ -115,19 +115,19 @@ def main() -> None:
     advanced.add_argument("--projection-k", default=UNSET, type=float, metavar="K", help=_with_default("Ink threshold = mean - K*std for projection method", "projection_k"))
     advanced.add_argument("--projection-denoise", default=UNSET, action="store_true", help=_with_default("Enable morphological denoising in projection step", "projection_denoise"))
 
-    # convert subcommand
-    convert = subparsers.add_parser("convert", parents=[common, settings_parser], help="Convert a score file into a new .s2l bundle.")
-    convert.set_defaults(func=_convert)
+    # 'new' subcommand
+    new = subparsers.add_parser("new", parents=[common, settings_parser], help="Create a new .s2l bundle from a score file.")
+    new.set_defaults(func=_new)
 
-    convert.add_argument("input", type=Path, help="Input score file")
-    output_group = convert.add_mutually_exclusive_group()
+    new.add_argument("input", type=Path, help="Input score file")
+    output_group = new.add_mutually_exclusive_group()
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (bundle name is derived automatically) (default: input file's directory)")
-    convert.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
-    convert.add_argument("--page-range", type=_parse_page_range, default=None, metavar="START-END", help="Only convert pages START through END (1-indexed, inclusive)")
+    new.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
+    new.add_argument("--page-range", type=_parse_page_range, default=None, metavar="START-END", help="Only convert pages START through END (1-indexed, inclusive)")
 
-    # update subcommand
-    update = subparsers.add_parser("update", parents=[common, settings_parser], help="Resume the pipeline from a .s2l bundle after manual edits.")
+    # 'update' subcommand
+    update = subparsers.add_parser("update", parents=[common, settings_parser], help="Partially re-run the pipeline on a .s2l bundle after manual edits.")
     update.set_defaults(func=_update)
 
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
@@ -146,7 +146,7 @@ def main() -> None:
     args.func(args)
 
 
-def _convert(args: argparse.Namespace) -> None:
+def _new(args: argparse.Namespace) -> None:
     input_path = args.input
     if not input_path.exists():
         logger.error("Input file not found: %s", input_path)
@@ -206,7 +206,7 @@ def _update(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     if getattr(args, "page_range", None) is not None:
-        logger.error("--page-range can only be used with 'convert', not 'update'.")
+        logger.error("--page-range can only be used with 'new', not 'update'.")
         sys.exit(1)
 
     maybe_ignored_args = [f.name for f in fields(ConvertSettings) if getattr(args, f.name, UNSET) is not UNSET]
