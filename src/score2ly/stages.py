@@ -12,5 +12,5 @@ class Stage(Enum):
     IMAGES        = "images"
     XML_SNIPPETS  = "xml_snippets"
     LY_SNIPPETS   = "ly_snippets"
-    LY_MERGE      = "ly_merge"
+    LILYPOND      = "lilypond"
     LY_RENDER     = "ly_render"

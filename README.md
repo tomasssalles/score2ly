@@ -59,7 +59,7 @@ score2ly runs a sequence of stages. Each stage reads the outputs of earlier stag
 | 4 | `04.musicxml/` | MusicXML exported from the Audiveris book project (or a MusicXML file you provided via `--xml`) |
 | 5 | `05.musicxml_clean/` | MusicXML with layout and style noise stripped out                                               |
 | 6 | `06.score_info/` | Score header metadata (title, composer, etc.) in JSON format                                    |
-| 7 | `07.ly_merge/` | The full-score LilyPond file generated from the clean MusicXML, with corrected header fields    |
+| 7 | `07.lilypond/` | The full-score LilyPond file generated from the clean MusicXML, with corrected header fields    |
 | 8 | `08.ly_render/` | A PDF rendered from the full-score LilyPond file                                                |
 | 9 | `09.layout/` | JSON layout data: which measures appear in which system on which page, with pixel coordinates   |
 | 10 | `10.images/` | Cropped PNG images of each system and each individual measure                                   |
@@ -134,7 +134,7 @@ score2ly update myscore.s2l --xml my_better_export.xml
 
 **Score info (`06.score_info/score_info.json`)** — Edit directly in any text editor.
 
-**Full-score LilyPond (`07.ly_merge/`)** — The merged LilyPond source. Editing this gives you a new rendered PDF immediately on the next `update`. Use [Frescobaldi](https://www.frescobaldi.org/) for a dedicated LilyPond editing experience with live preview.
+**Full-score LilyPond (`07.lilypond/`)** — The LilyPond source. Editing this gives you a new rendered PDF immediately on the next `update`. Use [Frescobaldi](https://www.frescobaldi.org/) for a dedicated LilyPond editing experience with live preview.
 
 **Cropped images (`10.images/`)** — Per-system and per-measure PNG crops. These are used as visual reference for the LLM-assisted fixing stage (not included yet, coming in Phase 2). Edit with any image editor (as suggested above for the **Page images**) if the automatic cropping missed something.
 

@@ -81,9 +81,9 @@ def run(input_pdf_path: Path | None, input_xml_path: Path | None, output_dir: Pa
             fn=_collect_score_info,
         ),
         _StageParams(
-            stage=Stage.LY_MERGE,
+            stage=Stage.LILYPOND,
             description="Convert clean MusicXML to LilyPond",
-            output_dir_name="ly_merge",
+            output_dir_name="lilypond",
             dependencies=(Stage.CLEAN_XML, Stage.SCORE_INFO),
             fn=_merge_ly,
         ),
@@ -91,7 +91,7 @@ def run(input_pdf_path: Path | None, input_xml_path: Path | None, output_dir: Pa
             stage=Stage.LY_RENDER,
             description="Render LilyPond score to PDF",
             output_dir_name="ly_render",
-            dependencies=(Stage.LY_MERGE,),
+            dependencies=(Stage.LILYPOND,),
             fn=_render_ly,
         ),
         _StageParams(
@@ -633,7 +633,7 @@ def _render_ly(
     stage_idx: int,
 ) -> Iterable[Path]:
     pipeline_output_dir = stage_output_dir.parent
-    score_ly_rel = dependencies_to_outputs[Stage.LY_MERGE][0]
+    score_ly_rel = dependencies_to_outputs[Stage.LILYPOND][0]
     score_ly = pipeline_output_dir / score_ly_rel
     dest = stage_output_dir / "score.pdf"
     lilypond.render(score_ly, dest, stage_idx)
