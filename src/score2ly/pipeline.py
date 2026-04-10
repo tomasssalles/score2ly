@@ -11,7 +11,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 from pdf2image import convert_from_path
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 from PIL import Image
 
 from score2ly import (
@@ -261,11 +261,32 @@ def _copy_original(
             f" Aborting pipeline..."
         )
 
-    dest = stage_output_dir / f"original{pipeline_input_path.suffix}"
-    shutil.copy2(pipeline_input_path, dest)
-    logger.info(
-        "Stage %d: Copied the original score %s into the .s2l bundle (%s)", stage_idx, pipeline_input_path, dest
-    )
+    if settings.page_range is not None:
+        start, end = settings.page_range
+        reader = PdfReader(pipeline_input_path)
+        total = len(reader.pages)
+        if end > total:
+            raise ValueError(
+                f"Stage {stage_idx}: Page range {start}-{end} exceeds PDF page count ({total})."
+            )
+        writer = PdfWriter()
+        for i in range(start - 1, end):
+            writer.add_page(reader.pages[i])
+
+        dest = stage_output_dir / f"original.pp{start}-{end}{pipeline_input_path.suffix}"
+        with dest.open("wb") as f:
+            writer.write(f)
+        logger.info(
+            "Stage %d: Extracted pages %d-%d from %s into the .s2l bundle (%s)",
+            stage_idx, start, end, pipeline_input_path, dest,
+        )
+    else:
+        dest = stage_output_dir / f"original{pipeline_input_path.suffix}"
+        shutil.copy2(pipeline_input_path, dest)
+        logger.info(
+            "Stage %d: Copied the original score %s into the .s2l bundle (%s)",
+            stage_idx, pipeline_input_path, dest,
+        )
 
     yield dest
 

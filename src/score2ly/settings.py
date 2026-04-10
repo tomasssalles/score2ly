@@ -18,6 +18,9 @@ class ConvertSettings:
     projection_k: float = 1.5
     projection_denoise: bool = False
 
+    # Page range to extract (1-indexed start/end, inclusive; None means all pages)
+    page_range: tuple[int, int] | None = None
+
     # Score info (CLI overrides for interactive prompts)
     title: str = ""
     subtitle: str = ""

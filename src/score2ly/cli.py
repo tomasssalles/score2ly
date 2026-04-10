@@ -17,6 +17,21 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf"}
 
+
+def _parse_page_range(s: str) -> tuple[int, int]:
+    parts = s.split("-")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(f"Expected format START-END (e.g. '5-9'), got: {s!r}")
+    try:
+        start, end = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Page numbers must be integers, got: {s!r}")
+    if start < 1:
+        raise argparse.ArgumentTypeError(f"Start page must be >= 1, got: {start}")
+    if end < start:
+        raise argparse.ArgumentTypeError(f"End page must be >= start ({start}), got: {end}")
+    return (start, end)
+
 UNSET = object()
 
 _LEVEL_COLORS = {
@@ -109,6 +124,7 @@ def main() -> None:
     output_group.add_argument("-o", "--output", type=Path, help="Full output path (must end in .s2l)")
     output_group.add_argument("-d", "--directory", type=Path, help="Parent directory for output (bundle name is derived automatically) (default: input file's directory)")
     convert.add_argument("--overwrite", action="store_true", help="Overwrite existing output bundle without prompting (error if it doesn't exist)")
+    convert.add_argument("--page-range", type=_parse_page_range, default=None, metavar="START-END", help="Only convert pages START through END (1-indexed, inclusive)")
 
     # update subcommand
     update = subparsers.add_parser("update", parents=[common, settings_parser], help="Resume the pipeline from a .s2l bundle after manual edits.")
@@ -173,7 +189,7 @@ def _convert(args: argparse.Namespace) -> None:
 
     logger.info("Processing: %s", input_path)
     logger.info("Output directory: %s", output_dir)
-    metadata.create(output_dir, sys.argv, Path.cwd(), input_path)
+    metadata.create(output_dir, sys.argv, Path.cwd(), input_path, args.page_range)
     _run_pipeline(input_path, output_dir, args)
 
 
@@ -187,6 +203,10 @@ def _update(args: argparse.Namespace) -> None:
         sys.exit(1)
     if not (output_dir / metadata.METADATA_FILENAME).exists():
         logger.error("No metadata file found in bundle: %s", output_dir)
+        sys.exit(1)
+
+    if getattr(args, "page_range", None) is not None:
+        logger.error("--page-range can only be used with 'convert', not 'update'.")
         sys.exit(1)
 
     maybe_ignored_args = [f.name for f in fields(ConvertSettings) if getattr(args, f.name, UNSET) is not UNSET]

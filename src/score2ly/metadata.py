@@ -30,14 +30,23 @@ def _save(output_dir: Path, data: dict) -> None:
     _path(output_dir).write_text(json.dumps(data, indent=2))
 
 
-def create(output_dir: Path, argv: list[str], working_dir: Path, input_path: Path) -> None:
+def create(
+    output_dir: Path,
+    argv: list[str],
+    working_dir: Path,
+    input_path: Path,
+    page_range: tuple[int, int] | None,
+) -> None:
+    input_data: dict = {
+        "absolute": str(input_path.resolve()),
+        "relative": str(relative(input_path, output_dir)),
+    }
+    if page_range is not None:
+        input_data["page_range"] = list(page_range)
     data = {
         "command": argv,
         "working_directory": str(working_dir),
-        "input": {
-            "absolute": str(input_path.resolve()),
-            "relative": str(relative(input_path, output_dir)),
-        },
+        "input": input_data,
         "history": [{"event": "created", "timestamp": _now()}],
         "stages": {},
     }
