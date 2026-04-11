@@ -32,11 +32,12 @@ def extract(omr_path: Path, stage: int, initial_measure_offset: int = 0) -> tupl
             interline = _parse_interline(sheet_xml, stage)
             padding = round(interline * _INTERLINE_PADDING_FACTOR)
 
+            page_measure_count = 0
             systems_out = []
 
             for sys_el in sheet_xml.find("page").findall("system"):
                 sys_id = int(sys_el.attrib["id"])
-                stacks = {int(s.attrib["id"]): s for s in sys_el.findall("stack")}
+                stack_els = sys_el.findall("stack")
 
                 part = sys_el.find("part")
                 staves = part.findall("staff") if part is not None else []
@@ -45,26 +46,39 @@ def extract(omr_path: Path, stage: int, initial_measure_offset: int = 0) -> tupl
                 staff_extent = _staff_line_extent(staves)
                 sys_bounds = _system_bounds(staff_extent, glyph_bounds, padding, page_height)
 
-                local_ids = sorted(stacks.keys())
-                first_global = global_measure_offset + local_ids[0]
-                last_global = global_measure_offset + local_ids[-1]
+                stack_ids = [int(s.attrib["id"]) for s in stack_els]
+                if stack_ids and stack_ids != list(range(stack_ids[0], stack_ids[0] + len(stack_ids))):
+                    logger.warning(
+                        "Stage %d: System %d stack IDs are not consecutive: %s — processing in document order.",
+                        stage, sys_id, stack_ids,
+                    )
+
+                stack_lefts = [int(s.attrib["left"]) for s in stack_els]
+                if stack_lefts != sorted(stack_lefts):
+                    logger.warning(
+                        "Stage %d: System %d stacks are not in left-to-right order — sorting by x-coordinate.",
+                        stage, sys_id,
+                    )
+                    stack_els = sorted(stack_els, key=lambda s: int(s.attrib["left"]))
 
                 measures_out = []
-                for local_id in local_ids:
-                    stack = stacks[local_id]
+                for stack in stack_els:
+                    page_measure_count += 1
+                    local_id = int(stack.attrib["id"])
+                    global_id = global_measure_offset + page_measure_count
                     stack_left = int(stack.attrib["left"])
                     stack_right = int(stack.attrib["right"])
                     meas_bounds = _measure_bounds(stack_left, stack_right, sys_bounds)
                     measures_out.append({
                         "local_id": local_id,
-                        "global_id": global_measure_offset + local_id,
+                        "global_id": global_id,
                         "bounds": meas_bounds,
                     })
 
                 systems_out.append({
                     "id": sys_id,
                     "bounds": sys_bounds,
-                    "measure_range": [first_global, last_global],
+                    "measure_range": [measures_out[0]["global_id"], measures_out[-1]["global_id"]],
                     "measures": measures_out,
                 })
 

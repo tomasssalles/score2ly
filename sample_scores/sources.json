@@ -1,5 +1,12 @@
 [
   {
+    "path": "cello_suite-leipzig.pdf",
+    "description": "",
+    "info_url": "",
+    "download_url": "",
+    "download_date": "2026-03-26"
+  },
+  {
     "path": "clair_de_lune-mutopia.pdf",
     "description": "Vector PDF typeset with LilyPond",
     "info_url": "https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1778",

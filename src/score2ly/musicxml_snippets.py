@@ -1,7 +1,10 @@
 import copy
+import logging
 from collections.abc import Sequence, Iterable
 from pathlib import Path
 from xml.etree import ElementTree
+
+logger = logging.getLogger(__name__)
 
 from score2ly.musicxml_cleanup import inject_missing_attrs
 
@@ -24,12 +27,12 @@ def extract_snippets(
     # Single pass per part: collect system measures and track attribute carry-forward.
     # per_system_measures[sys_i][part_id] = list of measure Elements (not yet copied)
     # system_carried[sys_i][part_id] = carried attrs dict for that part before that system
-    per_system_measures: list[dict[str, list]] = [{} for _ in sorted_systems]
+    per_system_measures: list[dict[str, dict[int, ElementTree.Element]]] = [{} for _ in sorted_systems]
     system_carried: list[dict[str, dict]] = [{} for _ in sorted_systems]
 
     for part in parts:
         part_id = part.attrib["id"]
-        measure_iter = iter(part.findall("measure"))
+        xml_measures = {int(m.attrib["number"]): m for m in part.findall("measure")}
         current_attrs: dict = {}
         prev_last: int | None = None
 
@@ -44,38 +47,42 @@ def extract_snippets(
 
             system_carried[sys_i][part_id] = dict(current_attrs)
 
-            measures = []
+            measures: dict[int, ElementTree.Element] = {}
             for expected_num in range(first_num, last_num + 1):
-                try:
-                    m = next(measure_iter)
-                except StopIteration:
-                    raise ValueError(
-                        f"Part {part_id}: XML ran out of measures before measure {expected_num}."
-                        f" The XML has fewer measures than the layout extracted from the PDF."
+                if expected_num not in xml_measures:
+                    logger.warning(
+                        "Part %s: measure %d not found in XML — skipping.",
+                        part_id, expected_num,
                     )
-                if int(m.attrib["number"]) != expected_num:
-                    raise ValueError(
-                        f"Part {part_id}: expected measure {expected_num}, got {m.attrib['number']}"
-                    )
+                    continue
+                m = xml_measures[expected_num]
                 _update_attrs(current_attrs, m)
-                measures.append(m)
+                measures[expected_num] = m
 
             per_system_measures[sys_i][part_id] = measures
             prev_last = last_num
 
     # Write snippets
+    any_part_id = parts[0].attrib["id"]
     for sys_i, system in enumerate(sorted_systems):
         carried_by_part = system_carried[sys_i]
-        first_num = sys_ranges[sys_i][0]
+        found_gids = sorted(per_system_measures[sys_i][any_part_id])
 
         sys_path = systems_dir / f"system_{system['global_id']:04d}.xml"
-        _write_snippet(root, part_list, parts, per_system_measures[sys_i], sys_path, carried_by_part)
-        yield sys_path
+        if found_gids:
+            sys_measures = {
+                pid: [m_dict[gid] for gid in found_gids]
+                for pid, m_dict in per_system_measures[sys_i].items()
+            }
+            _write_snippet(root, part_list, parts, sys_measures, sys_path, carried_by_part)
+            yield sys_path
 
         for m_info in system["measures"]:
-            idx = m_info["global_id"] - first_num
-            single = {pid: [measures[idx]] for pid, measures in per_system_measures[sys_i].items()}
-            meas_path = measures_dir / f"measure_{m_info['global_id']:04d}.xml"
+            gid = m_info["global_id"]
+            if gid not in per_system_measures[sys_i][any_part_id]:
+                continue
+            single = {pid: [m_dict[gid]] for pid, m_dict in per_system_measures[sys_i].items()}
+            meas_path = measures_dir / f"measure_{gid:04d}.xml"
             _write_snippet(root, part_list, parts, single, meas_path, carried_by_part)
             yield meas_path
 

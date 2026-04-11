@@ -19,7 +19,7 @@ The full pipeline is implemented and working:
 4. `04.musicxml/` — MusicXML export (from Audiveris, or user-provided via `--xml`)
 5. `05.musicxml_clean/` — Cleaned MusicXML
 6. `06.score_info/` — Score header JSON
-7. `07.ly_merge/` — Full-score LilyPond (symlinked as `transcription.ly`)
+7. `07.lilypond/` — Full-score LilyPond (symlinked as `transcription.ly`)
 8. `08.ly_render/` — Rendered PDF (symlinked as `transcription.pdf`)
 9. `09.layout/` — System/measure layout JSON
 10. `10.images/` — Cropped system and measure PNGs
