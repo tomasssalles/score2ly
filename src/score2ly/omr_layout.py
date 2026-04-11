@@ -64,7 +64,7 @@ def extract(omr_path: Path, stage: int, initial_measure_offset: int = 0) -> tupl
                 measures_out = []
                 for stack in stack_els:
                     page_measure_count += 1
-                    local_id = int(stack.attrib["id"])
+                    local_id = page_measure_count
                     global_id = global_measure_offset + page_measure_count
                     stack_left = int(stack.attrib["left"])
                     stack_right = int(stack.attrib["right"])
