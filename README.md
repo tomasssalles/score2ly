@@ -157,6 +157,12 @@ score2ly detects automatically whether a PDF is a scan or vector, but you can ov
 | `--sheet-method largest_contour` | Crop to the main sheet (largest contour)              | Page has a rectangular border to remove |
 | `--block-method contour` | Crop to the music block (contour detection)           | Significant non-musical areas (titles, margins) confuse OMR |
 | `--block-method projection` | Crop to the music block (ink-projection)              | Dense but well-separated music area |
+| `--background-normalize` | Divide each pixel by a blurred background estimate, flattening uneven illumination | Ghost ink or faint bleed-through from the reverse side of the page |
+| `--background-normalize-kernel F` | Kernel size as a fraction of page width for background estimation (default 0.1) | Fine-tune `--background-normalize` |
+| `--trunc-threshold` | Set all pixels at or above a value to white (ceiling) | Ghost ink or faint bleed-through from the reverse side of the page |
+| `--trunc-threshold-value V` | Pixel ceiling value for `--trunc-threshold` (default 200, range 0–255) | Fine-tune `--trunc-threshold` |
+| `--gamma-correction` | Push mid-range grays toward white (gamma curve)       | Ghost ink or faint bleed-through from the reverse side of the page |
+| `--gamma G` | Gamma value for `--gamma-correction` (default 2.0, suggested range 1.5–3.0) | Fine-tune `--gamma-correction` |
 | `--deskew` | Straighten slightly rotated pages                     | Scan was placed at a slight angle |
 | `--tight-crop` | Remove remaining whitespace after other steps         | Extra margin remaining after other crops |
 | `--clahe` | Enhance local contrast                                | Low-contrast, faded, or uneven scan |
@@ -239,6 +245,12 @@ Use `-` as the value for any score information field to leave it blank.
 --pdf-kind {auto,vector,scan}
 --sheet-method {none,cc,flood_fill,largest_contour}
 --block-method {none,contour,projection}
+--background-normalize
+--background-normalize-kernel F
+--trunc-threshold
+--trunc-threshold-value V
+--gamma-correction
+--gamma G
 --deskew
 --tight-crop
 --clahe

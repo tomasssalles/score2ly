@@ -448,6 +448,33 @@ def _tight_crop(gray: np.ndarray, ctx: _DebugCtx) -> np.ndarray:
     return cropped
 
 
+# --- Background normalization ---
+
+def _background_normalize(gray: np.ndarray, kernel_fraction: float) -> np.ndarray:
+    w = gray.shape[1]
+    k = max(3, round(w * kernel_fraction))
+    if k % 2 == 0:
+        k += 1
+    background = cv2.GaussianBlur(gray, (k, k), 0)
+    return cv2.divide(gray, background, scale=255)
+
+
+# --- Truncated thresholding ---
+
+def _trunc_threshold(gray: np.ndarray, value: int) -> np.ndarray:
+    result = gray.copy()
+    result[result >= value] = 255
+    return result
+
+
+# --- Gamma correction ---
+
+def _gamma_correction(gray: np.ndarray, gamma: float) -> np.ndarray:
+    inv_gamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)], dtype=np.uint8)
+    return cv2.LUT(gray, table)
+
+
 # --- CLAHE ---
 
 def _enhance_contrast(gray: np.ndarray) -> np.ndarray:
@@ -462,6 +489,12 @@ def process_page(
     *,
     sheet_method: SheetMethod,
     block_method: BlockMethod,
+    background_normalize: bool,
+    background_normalize_kernel: float,
+    trunc_threshold: bool,
+    trunc_threshold_value: int,
+    gamma_correction: bool,
+    gamma: float,
     deskew: bool,
     tight_crop: bool,
     clahe: bool,
@@ -491,17 +524,32 @@ def process_page(
         elif block_method is BlockMethod.PROJECTION:
             step = _crop_to_music_block_projection(step, ctx, k=projection_k, denoise=projection_denoise)
 
+    if background_normalize:
+        logger.info("  Step 3: background normalization (kernel_fraction=%.3f)", background_normalize_kernel)
+        step = _background_normalize(step, background_normalize_kernel)
+        ctx.save("background_normalize_result", step)
+
+    if trunc_threshold:
+        logger.info("  Step 4: truncated thresholding (value=%d)", trunc_threshold_value)
+        step = _trunc_threshold(step, trunc_threshold_value)
+        ctx.save("trunc_threshold_result", step)
+
+    if gamma_correction:
+        logger.info("  Step 5: gamma correction (gamma=%.2f)", gamma)
+        step = _gamma_correction(step, gamma)
+        ctx.save("gamma_correction_result", step)
+
     if deskew:
-        logger.info("  Step 3: deskew")
+        logger.info("  Step 6: deskew")
         step, angle, method = _deskew_staff_based(step, ctx)
         logger.info("  Deskew: %.3f° (%s)", angle, method)
 
     if tight_crop:
-        logger.info("  Step 4: tight crop")
+        logger.info("  Step 7: tight crop")
         step = _tight_crop(step, ctx)
 
     if clahe:
-        logger.info("  Step 5: enhance contrast (CLAHE)")
+        logger.info("  Step 8: enhance contrast (CLAHE)")
         step = _enhance_contrast(step)
 
     ctx.save("final", step)

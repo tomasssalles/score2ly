@@ -12,6 +12,12 @@ class ConvertSettings:
     # Image preprocessing (for scans)
     sheet_method: SheetMethod = SheetMethod.NONE
     block_method: BlockMethod = BlockMethod.NONE
+    background_normalize: bool = False
+    background_normalize_kernel: float = 0.1
+    trunc_threshold: bool = False
+    trunc_threshold_value: int = 200
+    gamma_correction: bool = False
+    gamma: float = 2.0
     deskew: bool = False
     tight_crop: bool = False
     clahe: bool = False
@@ -34,6 +40,9 @@ class ConvertSettings:
         return (
             self.sheet_method is SheetMethod.NONE
             and self.block_method is BlockMethod.NONE
+            and not self.background_normalize
+            and not self.trunc_threshold
+            and not self.gamma_correction
             and not self.deskew
             and not self.tight_crop
             and not self.clahe
