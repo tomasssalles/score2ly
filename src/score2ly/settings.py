@@ -47,3 +47,8 @@ class ConvertSettings:
             and not self.tight_crop
             and not self.clahe
         )
+
+
+@dataclass(frozen=True, slots=True)
+class FixSettings:
+    pass

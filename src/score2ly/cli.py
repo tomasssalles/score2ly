@@ -7,11 +7,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from importlib.metadata import version
+from typing import Any
 
-from score2ly import pipeline, metadata
+from score2ly import metadata, new_pipeline, fix_pipeline
 from score2ly.image_processing import BlockMethod, SheetMethod
 from score2ly.pdf import PdfKind
-from score2ly.settings import ConvertSettings
+from score2ly.settings import ConvertSettings, FixSettings
 
 logger = logging.getLogger(__name__)
 
@@ -84,58 +85,62 @@ class _TimestampFormatter(logging.Formatter):
         return msg
 
 
+def _with_default(help_str: str, arg_name: str, defaults: Any) -> str:
+    default_value = getattr(defaults, arg_name)
+    if issubclass(type(default_value), Enum):
+        default_value = default_value.value
+    return f"{help_str} (default: {default_value!r})"
+
+
 def main() -> None:
-    common = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    common.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
-    common.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
+    common_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    common_parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
+    common_parser.add_argument("--version", action="version", version=f"%(prog)s {version('score2ly')}")
 
     parser = argparse.ArgumentParser(
         prog="score2ly",
         description="Convert musical scores to LilyPond format.",
-        parents=[common],
+        parents=[common_parser],
         allow_abbrev=False,
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    settings_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    default_settings = ConvertSettings()
+    conv_settings_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    default_conv_settings = ConvertSettings()
 
-    def _with_default(help_str: str, arg_name: str) -> str:
-        default_value = getattr(default_settings, arg_name)
-        if issubclass(type(default_value), Enum):
-            default_value = default_value.value
-        return f"{help_str} (default: {default_value!r})"
+    score_info_group = conv_settings_parser.add_argument_group("score information")
+    score_info_group.add_argument("--title", default=UNSET, help=_with_default("Score title ('-' to leave blank)", "title", default_conv_settings))
+    score_info_group.add_argument("--subtitle", default=UNSET, help=_with_default("Score subtitle ('-' to leave blank)", "subtitle", default_conv_settings))
+    score_info_group.add_argument("--composer", default=UNSET, help=_with_default("Composer name ('-' to leave blank)", "composer", default_conv_settings))
+    score_info_group.add_argument("--work-number", default=UNSET, help=_with_default("Work number (e.g. Op. 45, BWV 772, K. 331) ('-' to leave blank)", "work_number", default_conv_settings))
+    score_info_group.add_argument("--copyright", default=UNSET, help=_with_default("Copyright or license statement ('-' to leave blank)", "copyright", default_conv_settings))
+    score_info_group.add_argument("--tagline", default=UNSET, help=_with_default("Tagline shown at the bottom of the last page ('-' to leave blank)", "tagline", default_conv_settings))
+    score_info_group.add_argument("--no-prompt", default=UNSET, action="store_true", help=_with_default("Skip interactive score information prompts and just use OMR-extracted values and any CLI args provided", "no_prompt", default_conv_settings))
 
-    score = settings_parser.add_argument_group("score information")
-    score.add_argument("--title", default=UNSET, help=_with_default("Score title ('-' to leave blank)", "title"))
-    score.add_argument("--subtitle", default=UNSET, help=_with_default("Score subtitle ('-' to leave blank)", "subtitle"))
-    score.add_argument("--composer", default=UNSET, help=_with_default("Composer name ('-' to leave blank)", "composer"))
-    score.add_argument("--work-number", default=UNSET, help=_with_default("Work number (e.g. Op. 45, BWV 772, K. 331) ('-' to leave blank)", "work_number"))
-    score.add_argument("--copyright", default=UNSET, help=_with_default("Copyright or license statement ('-' to leave blank)", "copyright"))
-    score.add_argument("--tagline", default=UNSET, help=_with_default("Tagline shown at the bottom of the last page ('-' to leave blank)", "tagline"))
-    score.add_argument("--no-prompt", default=UNSET, action="store_true", help=_with_default("Skip interactive score information prompts and just use OMR-extracted values and any CLI args provided", "no_prompt"))
-
-    advanced = settings_parser.add_argument_group("advanced")
-    advanced.add_argument("--pdf-kind", default=UNSET, choices=[k.value for k in PdfKind], help=_with_default("Override PDF type detection", "pdf_kind"))
-    advanced.add_argument("--sheet-method", default=UNSET, choices=[m.value for m in SheetMethod], help=_with_default("Page isolation method", "sheet_method"))
-    advanced.add_argument("--block-method", default=UNSET, choices=[m.value for m in BlockMethod], help=_with_default("Music block detection method", "block_method"))
-    advanced.add_argument("--background-normalize", default=UNSET, action="store_true", help=_with_default("Enable background normalization (division)", "background_normalize"))
-    advanced.add_argument("--background-normalize-kernel", default=UNSET, type=float, metavar="F", help=_with_default("Kernel size as a fraction of page width for background estimation", "background_normalize_kernel"))
-    advanced.add_argument("--trunc-threshold", default=UNSET, action="store_true", help=_with_default("Enable truncated thresholding (ceiling method)", "trunc_threshold"))
-    advanced.add_argument("--trunc-threshold-value", default=UNSET, type=int, metavar="V", help=_with_default("Pixels at or above this value are set to white (0–255)", "trunc_threshold_value"))
-    advanced.add_argument("--gamma-correction", default=UNSET, action="store_true", help=_with_default("Enable gamma correction (dark-weighted suppression)", "gamma_correction"))
-    advanced.add_argument("--gamma", default=UNSET, type=float, metavar="G", help=_with_default("Gamma value for correction (suggested range 1.5–3.0)", "gamma"))
-    advanced.add_argument("--deskew", default=UNSET, action="store_true", help=_with_default("Enable deskew step", "deskew"))
-    advanced.add_argument("--tight-crop", default=UNSET, action="store_true", help=_with_default("Enable tight crop step", "tight_crop"))
-    advanced.add_argument("--clahe", default=UNSET, action="store_true", help=_with_default("Enable CLAHE contrast enhancement", "clahe"))
-    advanced.add_argument("--projection-k", default=UNSET, type=float, metavar="K", help=_with_default("Ink threshold = mean - K*std for projection method", "projection_k"))
-    advanced.add_argument("--projection-denoise", default=UNSET, action="store_true", help=_with_default("Enable morphological denoising in projection step", "projection_denoise"))
+    advanced_pp_group = conv_settings_parser.add_argument_group("advanced image preprocessing")
+    advanced_pp_group.add_argument("--pdf-kind", default=UNSET, choices=[k.value for k in PdfKind], help=_with_default("Override PDF type detection", "pdf_kind", default_conv_settings))
+    advanced_pp_group.add_argument("--sheet-method", default=UNSET, choices=[m.value for m in SheetMethod], help=_with_default("Page isolation method", "sheet_method", default_conv_settings))
+    advanced_pp_group.add_argument("--block-method", default=UNSET, choices=[m.value for m in BlockMethod], help=_with_default("Music block detection method", "block_method", default_conv_settings))
+    advanced_pp_group.add_argument("--background-normalize", default=UNSET, action="store_true", help=_with_default("Enable background normalization (division)", "background_normalize", default_conv_settings))
+    advanced_pp_group.add_argument("--background-normalize-kernel", default=UNSET, type=float, metavar="F", help=_with_default("Kernel size as a fraction of page width for background estimation", "background_normalize_kernel", default_conv_settings))
+    advanced_pp_group.add_argument("--trunc-threshold", default=UNSET, action="store_true", help=_with_default("Enable truncated thresholding (ceiling method)", "trunc_threshold", default_conv_settings))
+    advanced_pp_group.add_argument("--trunc-threshold-value", default=UNSET, type=int, metavar="V", help=_with_default("Pixels at or above this value are set to white (0–255)", "trunc_threshold_value", default_conv_settings))
+    advanced_pp_group.add_argument("--gamma-correction", default=UNSET, action="store_true", help=_with_default("Enable gamma correction (dark-weighted suppression)", "gamma_correction", default_conv_settings))
+    advanced_pp_group.add_argument("--gamma", default=UNSET, type=float, metavar="G", help=_with_default("Gamma value for correction (suggested range 1.5–3.0)", "gamma", default_conv_settings))
+    advanced_pp_group.add_argument("--deskew", default=UNSET, action="store_true", help=_with_default("Enable deskew step", "deskew", default_conv_settings))
+    advanced_pp_group.add_argument("--tight-crop", default=UNSET, action="store_true", help=_with_default("Enable tight crop step", "tight_crop", default_conv_settings))
+    advanced_pp_group.add_argument("--clahe", default=UNSET, action="store_true", help=_with_default("Enable CLAHE contrast enhancement", "clahe", default_conv_settings))
+    advanced_pp_group.add_argument("--projection-k", default=UNSET, type=float, metavar="K", help=_with_default("Ink threshold = mean - K*std for projection method", "projection_k", default_conv_settings))
+    advanced_pp_group.add_argument("--projection-denoise", default=UNSET, action="store_true", help=_with_default("Enable morphological denoising in projection step", "projection_denoise", default_conv_settings))
 
     xml_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     xml_parser.add_argument("--xml", type=Path, default=None, metavar="FILE", help="Use this MusicXML file instead of running Audiveris OMR export")
 
+    fix_settings_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    default_fix_settings = FixSettings()
+
     # 'new' subcommand
-    new = subparsers.add_parser("new", parents=[common, settings_parser, xml_parser], help="Create a new .s2l bundle from a score file.")
+    new = subparsers.add_parser("new", parents=[common_parser, conv_settings_parser, xml_parser], help="Create a new .s2l bundle from a score file.")
     new.set_defaults(func=_new)
 
     new.add_argument("input_pdf", type=Path, help="Input score file")
@@ -146,10 +151,16 @@ def main() -> None:
     new.add_argument("--page-range", type=_parse_page_range, default=None, metavar="START-END", help="Only convert pages START through END (1-indexed, inclusive)")
 
     # 'update' subcommand
-    update = subparsers.add_parser("update", parents=[common, settings_parser, xml_parser], help="Partially re-run the pipeline on a .s2l bundle after manual edits.")
+    update = subparsers.add_parser("update", parents=[common_parser, conv_settings_parser, xml_parser], help="Partially re-run the pipeline on a .s2l bundle after manual edits.")
     update.set_defaults(func=_update)
 
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
+
+    # 'fix' subcommand
+    fix = subparsers.add_parser("fix", parents=[common_parser, fix_settings_parser], help="Fix OMR mistakes with an LLM.")
+    fix.set_defaults(func=_fix)
+
+    fix.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     args = parser.parse_args()
 
@@ -214,24 +225,24 @@ def _new(args: argparse.Namespace) -> None:
     logger.info("Processing: %s", input_pdf_path)
     logger.info("Output directory: %s", output_dir)
     metadata.create(output_dir, sys.argv, Path.cwd(), input_pdf_path, args.page_range)
-    _run_pipeline(input_pdf_path, input_xml_path, output_dir, args)
+    _run_new_pipeline(input_pdf_path, input_xml_path, output_dir, args)
+
+
+def _check_bundle_path(path: Path) -> None:
+    if not path.is_dir():
+        logger.error("Bundle directory not found: %s", path)
+        sys.exit(1)
+    if path.suffix != ".s2l":
+        logger.error("Bundle path must end in .s2l: %s", path)
+        sys.exit(1)
+    if not (path / metadata.METADATA_FILENAME).exists():
+        logger.error("No metadata file found in bundle: %s", path)
+        sys.exit(1)
 
 
 def _update(args: argparse.Namespace) -> None:
     output_dir = args.bundle
-    if not output_dir.is_dir():
-        logger.error("Bundle directory not found: %s", output_dir)
-        sys.exit(1)
-    if output_dir.suffix != ".s2l":
-        logger.error("Bundle path must end in .s2l: %s", output_dir)
-        sys.exit(1)
-    if not (output_dir / metadata.METADATA_FILENAME).exists():
-        logger.error("No metadata file found in bundle: %s", output_dir)
-        sys.exit(1)
-
-    if getattr(args, "page_range", None) is not None:
-        logger.error("--page-range can only be used with 'new', not 'update'.")
-        sys.exit(1)
+    _check_bundle_path(output_dir)
 
     input_xml_path = args.xml
     if input_xml_path is not None:
@@ -247,10 +258,18 @@ def _update(args: argparse.Namespace) -> None:
         print()
 
     logger.info("Updating bundle: %s", output_dir)
-    _run_pipeline(None, input_xml_path, output_dir, args)
+    _run_new_pipeline(None, input_xml_path, output_dir, args)
 
 
-def _run_pipeline(
+def _fix(args: argparse.Namespace) -> None:
+    output_dir = args.bundle
+    _check_bundle_path(output_dir)
+
+    logger.info("Fixing LilyPond for bundle: %s", output_dir)
+    _run_fix_pipeline(output_dir, args)
+
+
+def _run_new_pipeline(
     input_pdf_path: Path | None,
     input_xml_path: Path | None,
     output_dir: Path,
@@ -275,7 +294,26 @@ def _run_pipeline(
     settings = ConvertSettings(**settings_kwargs)
 
     try:
-        pipeline.run(input_pdf_path, input_xml_path, output_dir, settings)
+        new_pipeline.run(input_pdf_path, input_xml_path, output_dir, settings)
+    except ValueError:
+        logger.exception("Oops, something went wrong.")
+        sys.exit(2)
+
+
+def _run_fix_pipeline(output_dir: Path, args: argparse.Namespace) -> None:
+    settings_kwargs = {}
+    for field in fields(FixSettings):
+        name = field.name
+        value = getattr(args, name, UNSET)
+
+        if value is UNSET:
+            continue
+
+        settings_kwargs[name] = value
+    settings = FixSettings(**settings_kwargs)
+
+    try:
+        fix_pipeline.run(output_dir, settings)
     except ValueError:
         logger.exception("Oops, something went wrong.")
         sys.exit(2)
