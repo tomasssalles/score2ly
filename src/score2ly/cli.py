@@ -9,7 +9,7 @@ from pathlib import Path
 from importlib.metadata import version
 from typing import Any
 
-from score2ly import metadata, new_pipeline, fix_pipeline
+from score2ly import metadata, convert_pipeline, fix_pipeline
 from score2ly.image_processing import BlockMethod, SheetMethod
 from score2ly.pdf import PdfKind
 from score2ly.settings import ConvertSettings, FixSettings
@@ -225,7 +225,7 @@ def _new(args: argparse.Namespace) -> None:
     logger.info("Processing: %s", input_pdf_path)
     logger.info("Output directory: %s", output_dir)
     metadata.create(output_dir, sys.argv, Path.cwd(), input_pdf_path, args.page_range)
-    _run_new_pipeline(input_pdf_path, input_xml_path, output_dir, args)
+    _run_convert_pipeline(input_pdf_path, input_xml_path, output_dir, args)
 
 
 def _check_bundle_path(path: Path) -> None:
@@ -258,7 +258,7 @@ def _update(args: argparse.Namespace) -> None:
         print()
 
     logger.info("Updating bundle: %s", output_dir)
-    _run_new_pipeline(None, input_xml_path, output_dir, args)
+    _run_convert_pipeline(None, input_xml_path, output_dir, args)
 
 
 def _fix(args: argparse.Namespace) -> None:
@@ -269,7 +269,7 @@ def _fix(args: argparse.Namespace) -> None:
     _run_fix_pipeline(output_dir, args)
 
 
-def _run_new_pipeline(
+def _run_convert_pipeline(
     input_pdf_path: Path | None,
     input_xml_path: Path | None,
     output_dir: Path,
@@ -294,7 +294,7 @@ def _run_new_pipeline(
     settings = ConvertSettings(**settings_kwargs)
 
     try:
-        new_pipeline.run(input_pdf_path, input_xml_path, output_dir, settings)
+        convert_pipeline.run(input_pdf_path, input_xml_path, output_dir, settings)
     except ValueError:
         logger.exception("Oops, something went wrong.")
         sys.exit(2)

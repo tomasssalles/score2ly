@@ -1,8 +1,8 @@
 import json
+import logging
 import shutil
 from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor, Future
-from logging import getLogger
 from pathlib import Path
 
 import cv2
@@ -30,7 +30,7 @@ from score2ly.settings import ConvertSettings
 from score2ly.stages import Stage
 from score2ly.utils import relative
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 # noinspection PyTypeChecker
@@ -131,7 +131,7 @@ def run(input_pdf_path: Path | None, input_xml_path: Path | None, output_dir: Pa
     for stage_idx, params in enumerate(get_stage_params(input_pdf_path, input_xml_path), start=1):
         run_stage(params, output_dir, settings, stage_idx, logger)
 
-    logger.info("Transcription pipeline finished successfully.")
+    logger.info("Conversion pipeline finished successfully.")
 
 
 def _copy_original(
