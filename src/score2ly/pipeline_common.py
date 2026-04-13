@@ -30,6 +30,21 @@ class StageParams[SettingsT]:
     fn: StageFn[SettingsT]
 
 
+def get_dependencies_to_outputs(
+    stage_idx: int,
+    dependencies: Sequence[Stage],
+    stages_meta: dict[Stage, dict],
+) -> dict[Stage, Sequence[Path]]:
+    result = {}
+    for dep in dependencies:
+        dep_meta = stages_meta.get(dep)
+        if (not dep_meta) or (not (dep_outputs := dep_meta.get("outputs"))):
+            raise RuntimeError(f"Stage {stage_idx}: Dependency stage {dep.value!r} has not completed. Aborting...")
+        result[dep] = tuple(Path(s) for s in dep_outputs)
+
+    return result
+
+
 def should_run(
     stage_idx: int,
     dependencies: Sequence[Stage],
@@ -92,15 +107,9 @@ def run_stage[SettingsT](
     logger.info("* Stage %d: %s", stage_idx, params.description)
 
     stages_meta = metadata.get_stages(pipeline_output_dir)
-
-    dependencies_to_outputs: dict[Stage, Sequence[Path]] = {}
-    for dep in params.dependencies:
-        dep_meta = stages_meta.get(dep)
-        if (not dep_meta) or (not (dep_outputs := dep_meta.get("outputs"))):
-            raise RuntimeError(f"Stage {stage_idx}: Dependency stage {dep.value!r} has not completed. Aborting...")
-        dependencies_to_outputs[dep] = tuple(Path(s) for s in dep_outputs)
-
+    dependencies_to_outputs = get_dependencies_to_outputs(stage_idx, params.dependencies, stages_meta)
     stage_meta = stages_meta.get(params.stage)
+
     if not should_run(
         stage_idx, params.dependencies, stage_meta, pipeline_output_dir, dependencies_to_outputs, logger
     ):
