@@ -1,6 +1,7 @@
 import json
 import logging
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from score2ly import convert_pipeline, metadata
@@ -33,9 +34,17 @@ def _verify_convert_pipeline(stage_params: Sequence[StageParams[ConvertSettings]
     logger.info("First %d stages (conversion) are already done. Moving on.", len(stage_params))
 
 
+def _collect_llm_params(settings: FixSettings) -> FixSettings:
+    model = settings.model or input("Model (e.g. claude-opus-4-6): ").strip()
+    api_key = settings.api_key or input("API key: ").strip()
+    return replace(settings, model=model, api_key=api_key)
+
+
 def run(output_dir: Path, settings: FixSettings) -> None:
     conv_pipeline_stage_params = convert_pipeline.get_stage_params(None, None)
     _verify_convert_pipeline(conv_pipeline_stage_params, output_dir)
+
+    settings = _collect_llm_params(settings)
 
     stage_params: Sequence[StageParams[FixSettings]] = (
         StageParams(
@@ -59,6 +68,10 @@ def _llm_plan(
     dependencies_to_outputs: dict[Stage, Sequence[Path]],
     stage_idx: int,
 ) -> Iterable[Path]:
+    if not settings.model:
+        raise PipelineError(f"Stage {stage_idx}: No model specified.")
+    if not settings.api_key:
+        raise PipelineError(f"Stage {stage_idx}: No API key provided.")
     logger.info("Stage %d: LLM planning (dummy)...", stage_idx)
     dest = stage_output_dir / "plan.json"
     dest.write_text(json.dumps({"status": "dummy"}, indent=2))
