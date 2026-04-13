@@ -1,11 +1,13 @@
+import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from score2ly import convert_pipeline, metadata
 from score2ly.exceptions import PipelineError
 from score2ly.pipeline_common import run_stage, StageParams, should_run, get_dependencies_to_outputs
 from score2ly.settings import FixSettings, ConvertSettings
+from score2ly.stages import Stage
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +37,29 @@ def run(output_dir: Path, settings: FixSettings) -> None:
     conv_pipeline_stage_params = convert_pipeline.get_stage_params(None, None)
     _verify_convert_pipeline(conv_pipeline_stage_params, output_dir)
 
-    stage_params: Sequence[StageParams[FixSettings]] = ()
+    stage_params: Sequence[StageParams[FixSettings]] = (
+        StageParams(
+            stage=Stage.LLM_PLAN,
+            description="Plan LLM-assisted fixes for the full score (dummy)",
+            output_dir_name="llm_plan",
+            dependencies=(),
+            fn=_llm_plan,
+        ),
+    )
 
     for stage_idx, params in enumerate(stage_params, start=len(conv_pipeline_stage_params) + 1):
         run_stage(params, output_dir, settings, stage_idx, logger)
 
     logger.info("Fixing pipeline finished successfully.")
+
+
+def _llm_plan(
+    stage_output_dir: Path,
+    settings: FixSettings,
+    dependencies_to_outputs: dict[Stage, Sequence[Path]],
+    stage_idx: int,
+) -> Iterable[Path]:
+    logger.info("Stage %d: LLM planning (dummy)...", stage_idx)
+    dest = stage_output_dir / "plan.json"
+    dest.write_text(json.dumps({"status": "dummy"}, indent=2))
+    yield dest

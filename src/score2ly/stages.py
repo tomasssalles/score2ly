@@ -14,3 +14,4 @@ class Stage(Enum):
     LY_SNIPPETS   = "ly_snippets"
     LILYPOND      = "lilypond"
     LY_RENDER     = "ly_render"
+    LLM_PLAN      = "llm_plan"
