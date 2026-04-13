@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from score2ly.image_processing import BlockMethod, SheetMethod
 from score2ly.pdf import PdfKind
+from score2ly.utils import APIKey
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,4 +54,4 @@ class ConvertSettings:
 class FixSettings:
     # LLM parameters (CLI overrides for interactive prompts)
     model: str = ""
-    api_key: str = ""
+    api_key: APIKey = APIKey("")

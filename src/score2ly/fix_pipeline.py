@@ -9,6 +9,7 @@ from score2ly.exceptions import PipelineError
 from score2ly.pipeline_common import run_stage, StageParams, should_run, get_dependencies_to_outputs
 from score2ly.settings import FixSettings, ConvertSettings
 from score2ly.stages import Stage
+from score2ly.utils import APIKey
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def _verify_convert_pipeline(stage_params: Sequence[StageParams[ConvertSettings]
 
 def _collect_llm_params(settings: FixSettings) -> FixSettings:
     model = settings.model or input("Model (e.g. claude-opus-4-6): ").strip()
-    api_key = settings.api_key or input("API key: ").strip()
+    api_key = settings.api_key or APIKey(input("API key: ").strip())
     return replace(settings, model=model, api_key=api_key)
 
 
