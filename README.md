@@ -270,6 +270,16 @@ BUNDLE                        Path to the .s2l bundle directory
 
 > **Note:** All score information and advanced preprocessing arguments from `new` are also accepted in `update`, but will be silently ignored if the relevant stage has already completed and its inputs have not changed.
 
+### `score2ly fix BUNDLE`
+
+Run the LLM-assisted fixing pipeline on a completed `.s2l` bundle. Requires all 12 conversion stages to be finished first — run `score2ly new` or `score2ly update` to completion before using this command.
+
+```
+BUNDLE                        Path to the .s2l bundle directory
+```
+
+> **Note:** This command is under active development. The fixing stages are not yet implemented; the command currently validates that the conversion pipeline is complete and will exit successfully.
+
 ---
 
 ## External tools
@@ -298,4 +308,4 @@ A graphical interface (`Score2LilyPond`) is planned but not yet implemented.
 
 ### Fixing OMR mistakes with LLMs (Phase 2 of the project)
 
-This is the main goal of the project and what could one day make it one of the best, affordable ways to transcribe score PDFs into LilyPond format. As you may have noticed, the pipeline already produces some artifacts that are currently not used for the final `transcription.ly` and `transcription.pdf` outputs, such as cropped PNGs of each individual system and short LilyPond snippets of each individual system. These artifacts are meant to be given to a frontier LLM to revise and improve, and in the end the (future) pipeline will combine the results into a final LilyPond source for the full score.
+This is the main goal of the project and what could one day make it one of the best, affordable ways to transcribe score PDFs into LilyPond format. The `score2ly fix` command is the entry point for this pipeline and is already available, but its stages are still being implemented. As you may have noticed, the conversion pipeline already produces some artifacts not used in the final `transcription.ly` and `transcription.pdf` outputs — cropped PNGs of each individual system and short LilyPond snippets of each individual system. These artifacts are meant to be given to a frontier LLM to revise and improve, and the fixing pipeline will combine the results into a final LilyPond source for the full score.
