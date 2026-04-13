@@ -4,6 +4,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from score2ly.exceptions import PipelineError
+
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "AUDIVERIS_PATH"
@@ -18,7 +20,7 @@ def find_executable() -> Path:
         exe = Path(path)
         if exe.is_file():
             return exe
-        raise RuntimeError(
+        raise PipelineError(
             f"Audiveris not found at {_ENV_VAR}={path!r}. Check that the path is correct."
         )
 
@@ -27,7 +29,7 @@ def find_executable() -> Path:
     if found:
         return Path(found)
 
-    raise RuntimeError(
+    raise PipelineError(
         "Audiveris not found. Install it and ensure 'audiveris' is on your PATH, "
         f"or set the {_ENV_VAR} environment variable to the executable path.\n"
         f"See: {_INSTALL_URL}\n"
@@ -47,7 +49,7 @@ def _run_audiveris(input_path: Path, extra_args: list[str], work_dir: Path, stag
     if result.returncode != 0:
         log_files = sorted(work_dir.glob(f"{input_path.stem}-*.log"))
         log_hint = f"See log: {log_files[-1]}" if log_files else f"No log file found in {work_dir}"
-        raise RuntimeError(f"Audiveris {identifier} failed (exit code {result.returncode}). {log_hint}")
+        raise PipelineError(f"Audiveris {identifier} failed (exit code {result.returncode}). {log_hint}")
 
 
 def run_omr(input_path: Path, work_dir: Path, stage: int, bundle_root: Path) -> Path:
@@ -56,7 +58,7 @@ def run_omr(input_path: Path, work_dir: Path, stage: int, bundle_root: Path) -> 
 
     expected = work_dir / f"{input_path.stem}.omr"
     if not expected.exists():
-        raise RuntimeError(f"Audiveris ran but produced no .omr output at {expected}")
+        raise PipelineError(f"Audiveris ran but produced no .omr output at {expected}")
 
     logger.info(
         "Stage %d: Finished OMR run %s -> %s",
@@ -82,10 +84,10 @@ def export_xml(omr_path: Path, work_dir: Path, stage: int, bundle_root: Path) ->
     if not expected.exists():
         mvt_files = sorted(work_dir.glob(f"{omr_link.stem}.mvt*.xml"))
         if mvt_files:
-            raise RuntimeError(
+            raise PipelineError(
                 f"Multi-movement scores are not yet supported. "
                 f"Audiveris exported {len(mvt_files)} movement file(s): "
                 + ", ".join(f.name for f in mvt_files)
             )
-        raise RuntimeError(f"Audiveris export did not produce the expected XML output file {expected}")
+        raise PipelineError(f"Audiveris export did not produce the expected XML output file {expected}")
     return expected

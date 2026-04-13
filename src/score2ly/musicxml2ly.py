@@ -4,6 +4,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from score2ly.exceptions import PipelineError
+
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "MUSICXML2LY_PATH"
@@ -16,7 +18,7 @@ def find_executable() -> Path:
         exe = Path(path)
         if exe.is_file():
             return exe
-        raise RuntimeError(
+        raise PipelineError(
             f"musicxml2ly not found at {_ENV_VAR}={path!r}. Check that the path is correct."
         )
 
@@ -25,7 +27,7 @@ def find_executable() -> Path:
     if found:
         return Path(found)
 
-    raise RuntimeError(
+    raise PipelineError(
         "musicxml2ly not found. Install LilyPond and ensure 'musicxml2ly' is on your PATH, "
         f"or set the {_ENV_VAR} environment variable to the executable path.\n"
         f"See: {_INSTALL_URL}"
@@ -50,9 +52,9 @@ def run(input_xml: Path, output_ly: Path, stage: int) -> None:
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(
+        raise PipelineError(
             f"musicxml2ly failed (exit code {result.returncode}).\n{result.stderr.strip()}"
         )
 
     if not output_ly.exists():
-        raise RuntimeError(f"musicxml2ly ran but produced no output at {output_ly}")
+        raise PipelineError(f"musicxml2ly ran but produced no output at {output_ly}")

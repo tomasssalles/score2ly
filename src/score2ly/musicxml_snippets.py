@@ -6,6 +6,7 @@ from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
+from score2ly.exceptions import PipelineError
 from score2ly.musicxml_cleanup import inject_missing_attrs
 
 _CARRY_FORWARD_TAGS = frozenset({"divisions", "time", "key", "clef"})
@@ -39,7 +40,7 @@ def extract_snippets(
         for sys_i, (system, (first_num, last_num)) in enumerate(zip(sorted_systems, sys_ranges)):
             if prev_last is not None and first_num != prev_last + 1:
                 prev_global_id = sorted_systems[sys_i - 1]["global_id"]
-                raise ValueError(
+                raise PipelineError(
                     f"Part {part_id}: gap in system layout — system {system['global_id']} starts"
                     f" at measure {first_num} but system {prev_global_id} ended at {prev_last}."
                     f" Layout and XML are out of sync."
@@ -91,7 +92,7 @@ def _sort_and_validate(systems: Sequence[dict]) -> tuple[list[dict], list[tuple[
     def get_range(s: dict) -> tuple[int, int]:
         nums = sorted(m["global_id"] for m in s["measures"])
         if nums != list(range(nums[0], nums[-1] + 1)):
-            raise ValueError(f"System {s['global_id']} has non-contiguous measures: {nums}")
+            raise PipelineError(f"System {s['global_id']} has non-contiguous measures: {nums}")
         return nums[0], nums[-1]
 
     sorted_s = sorted(systems, key=lambda s: min(m["global_id"] for m in s["measures"]))

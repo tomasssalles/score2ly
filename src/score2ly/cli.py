@@ -2,6 +2,8 @@ import argparse
 import logging
 import shutil
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import fields
 from datetime import datetime, timezone
 from enum import Enum
@@ -10,6 +12,7 @@ from importlib.metadata import version
 from typing import Any
 
 from score2ly import metadata, convert_pipeline, fix_pipeline
+from score2ly.exceptions import PipelineError
 from score2ly.image_processing import BlockMethod, SheetMethod
 from score2ly.pdf import PdfKind
 from score2ly.settings import ConvertSettings, FixSettings
@@ -269,6 +272,20 @@ def _fix(args: argparse.Namespace) -> None:
     _run_fix_pipeline(output_dir, args)
 
 
+@contextmanager
+def _error_handling(verbose: bool) -> Iterator[None]:
+    # noinspection PyBroadException
+    try:
+        yield
+    except PipelineError as e:
+        log = logger.exception if verbose else logger.error
+        log("%s", e)
+        sys.exit(1)
+    except Exception:
+        logger.exception("Oops, something went wrong.")
+        sys.exit(2)
+
+
 def _run_convert_pipeline(
     input_pdf_path: Path | None,
     input_xml_path: Path | None,
@@ -293,11 +310,8 @@ def _run_convert_pipeline(
         settings_kwargs[name] = value
     settings = ConvertSettings(**settings_kwargs)
 
-    try:
+    with _error_handling(args.verbose):
         convert_pipeline.run(input_pdf_path, input_xml_path, output_dir, settings)
-    except ValueError:
-        logger.exception("Oops, something went wrong.")
-        sys.exit(2)
 
 
 def _run_fix_pipeline(output_dir: Path, args: argparse.Namespace) -> None:
@@ -312,8 +326,5 @@ def _run_fix_pipeline(output_dir: Path, args: argparse.Namespace) -> None:
         settings_kwargs[name] = value
     settings = FixSettings(**settings_kwargs)
 
-    try:
+    with _error_handling(args.verbose):
         fix_pipeline.run(output_dir, settings)
-    except ValueError:
-        logger.exception("Oops, something went wrong.")
-        sys.exit(2)

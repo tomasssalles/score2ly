@@ -6,6 +6,8 @@ from pathlib import Path
 import img2pdf
 from pypdf import PdfReader
 
+from score2ly.exceptions import PipelineError
+
 
 class PdfKind(str, Enum):
     AUTO = "auto"
@@ -36,7 +38,7 @@ def build_omr_pdf(png_paths: Sequence[Path], output_pdf: Path) -> None:
     pixel coordinates that match the source PNGs.
     """
     if not png_paths:
-        raise ValueError("No pages to build PDF from")
+        raise PipelineError("No pages to build PDF from")
     layout = img2pdf.get_fixed_dpi_layout_fun((_DESIRED_DPI, _DESIRED_DPI))
     output_pdf.write_bytes(img2pdf.convert([str(p) for p in png_paths], layout_fun=layout))
 

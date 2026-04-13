@@ -24,6 +24,7 @@ from score2ly import (
     pdf,
     score_info,
 )
+from score2ly.exceptions import PipelineError
 from score2ly.pdf import PdfKind
 from score2ly.pipeline_common import StageParams, run_stage
 from score2ly.settings import ConvertSettings
@@ -142,7 +143,7 @@ def _copy_original(
     stage_idx: int,
 ) -> Iterable[Path]:
     if pipeline_input_path is None:
-        raise ValueError(
+        raise PipelineError(
             f"Stage {stage_idx}: No input path provided and no valid copy of original score available."
             f" Aborting pipeline..."
         )
@@ -152,7 +153,7 @@ def _copy_original(
         reader = PdfReader(pipeline_input_path)
         total = len(reader.pages)
         if end > total:
-            raise ValueError(
+            raise PipelineError(
                 f"Stage {stage_idx}: Page range {start}-{end} exceeds PDF page count ({total})."
             )
         writer = PdfWriter()
@@ -406,7 +407,7 @@ def _validate_layout_against_book(
         page_num = page_sheet["sheet"]
         book_sheet = book_by_page.get(page_num)
         if book_sheet is None:
-            raise RuntimeError(
+            raise PipelineError(
                 f"Stage {stage_idx}: Page {page_num} present in per-page layout but missing from book OMR."
             )
 
@@ -414,14 +415,14 @@ def _validate_layout_against_book(
         book_systems = book_sheet["systems"]
 
         if len(page_systems) != len(book_systems):
-            raise RuntimeError(
+            raise PipelineError(
                 f"Stage {stage_idx}: Layout mismatch on page {page_num}: "
                 f"per-page OMR has {len(page_systems)} system(s), book OMR has {len(book_systems)}."
             )
 
         for sys_i, (page_sys, book_sys) in enumerate(zip(page_systems, book_systems)):
             if page_sys["measure_range"] != book_sys["measure_range"]:
-                raise RuntimeError(
+                raise PipelineError(
                     f"Stage {stage_idx}: Layout mismatch on page {page_num}, "
                     f"system {sys_i + 1} (in-page index): "
                     f"per-page measure range {page_sys['measure_range']} vs book OMR {book_sys['measure_range']}."
@@ -430,7 +431,7 @@ def _validate_layout_against_book(
     per_page_nums = {sheet["sheet"] for sheet in page_sheets}
     for page_num, book_sheet in book_by_page.items():
         if page_num not in per_page_nums and book_sheet["systems"]:
-            raise RuntimeError(
+            raise PipelineError(
                 f"Stage {stage_idx}: Page {page_num} is absent from per-page OMR but has "
                 f"{len(book_sheet['systems'])} system(s) in book OMR — expected no musical content."
             )

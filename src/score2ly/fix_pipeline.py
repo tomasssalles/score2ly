@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from score2ly import convert_pipeline, metadata
+from score2ly.exceptions import PipelineError
 from score2ly.pipeline_common import run_stage, StageParams, should_run, get_dependencies_to_outputs
 from score2ly.settings import FixSettings, ConvertSettings
 
@@ -22,7 +23,7 @@ def _verify_convert_pipeline(stage_params: Sequence[StageParams[ConvertSettings]
         dependencies_to_outputs = get_dependencies_to_outputs(stage_idx, params.dependencies, stages_meta)
 
         if should_run(stage_idx, params.dependencies, stage_meta, output_dir, dependencies_to_outputs, null_logger):
-            raise RuntimeError(
+            raise PipelineError(
                 f"Stage {stage_idx} from the conversion pipeline is not done. Complete the conversion stages first with"
                 f" 'score2ly update path/to/bundle.s2l' or run them from scratch with 'score2ly new path/to/score.pdf'."
             )
