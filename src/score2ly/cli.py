@@ -105,6 +105,24 @@ def _config(args: argparse.Namespace) -> None:
     args.config_func(args)
 
 
+def _config_list(args: argparse.Namespace) -> None:
+    cfg = config_utils.load()
+    path = config_utils.CONFIG_PATH
+    print(f"Config file: {path}{'' if path.exists() else ' (not found)'}")
+    print()
+    print(f"  default_model  {cfg.default_model or '(not set)'}")
+    if cfg.max_retries is not None:
+        print(f"  max_retries    {cfg.max_retries}")
+    else:
+        print(f"  max_retries    (not set, default: {DEFAULT_MAX_RETRIES})")
+    if cfg.api_keys:
+        print("  api_keys:")
+        for provider, key in cfg.api_keys.items():
+            print(f"    {provider:<16}{key}")
+    else:
+        print("  api_keys       (none)")
+
+
 def _config_path(args: argparse.Namespace) -> None:
     if not config_utils.CONFIG_PATH.exists():
         config_utils.save(config_utils.AppConfig())
@@ -123,7 +141,7 @@ def main() -> None:
         parents=[common_parser],
         allow_abbrev=False,
     )
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", title="subcommands")
 
     conv_settings_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     default_conv_settings = ConvertSettings()
@@ -189,11 +207,11 @@ def main() -> None:
 
     # 'config' subcommand
     config_parser = subparsers.add_parser("config", parents=[common_parser], help="Manage score2ly configuration.")
-    config_subparsers = config_parser.add_subparsers(dest="config_command")
+    config_subparsers = config_parser.add_subparsers(dest="config_command", title="subcommands")
     config_parser.set_defaults(func=_config, config_subparser=config_parser, config_func=None)
 
-    config_path_parser = config_subparsers.add_parser("path", help=f"Print the path to the config file.")
-    config_path_parser.set_defaults(config_func=_config_path)
+    config_subparsers.add_parser("list", help="Show current configuration values.").set_defaults(config_func=_config_list)
+    config_subparsers.add_parser("path", help="Print the path to the config file.").set_defaults(config_func=_config_path)
 
     args = parser.parse_args()
 
