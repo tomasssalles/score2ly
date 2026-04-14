@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from score2ly import config_utils, convert_pipeline, metadata
+from score2ly.settings import DEFAULT_MAX_RETRIES
 from score2ly.exceptions import PipelineError
 from score2ly.pipeline_common import run_stage, StageParams, should_run, get_dependencies_to_outputs
 from score2ly.settings import FixSettings, ConvertSettings
@@ -49,7 +50,15 @@ def _collect_llm_params(settings: FixSettings) -> FixSettings:
                 break
 
     api_key = settings.api_key or cfg.get_api_key_for_model(model) or APIKey(input("API key (or '-' to use cached requests only): ").strip())
-    return replace(settings, model=model, api_key=api_key)
+
+    if settings.max_retries is not None:
+        max_retries = settings.max_retries
+    elif cfg.max_retries is not None:
+        max_retries = cfg.max_retries
+    else:
+        max_retries = DEFAULT_MAX_RETRIES
+
+    return replace(settings, model=model, api_key=api_key, max_retries=max_retries)
 
 
 def run(output_dir: Path, settings: FixSettings) -> None:

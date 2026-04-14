@@ -125,11 +125,27 @@ def test_load_bad_api_key_type_no_key_leak(tmp_path, caplog):
     assert bad_secret not in caplog.text
 
 
+def test_load_max_retries(tmp_path):
+    cfg = _load_from_toml(tmp_path, "max_retries = 5\n")
+    assert cfg.max_retries == 5
+
+
+def test_load_max_retries_missing(tmp_path):
+    cfg = _load_from_toml(tmp_path, 'default_model = "gemini/gemini-2.5-flash"\n')
+    assert cfg.max_retries is None
+
+
+def test_load_max_retries_invalid_type_ignored(tmp_path):
+    cfg = _load_from_toml(tmp_path, 'max_retries = "five"\n')
+    assert cfg.max_retries is None
+
+
 def test_load_full_config(tmp_path, caplog):
     ant_secret = "sk-ant-123"
     gem_secret = "AIza456"
     toml = (
         f'default_model = "anthropic/claude-opus-4-6"\n'
+        f'max_retries = 3\n'
         f'\n'
         f'[api_keys]\n'
         f'anthropic = "{ant_secret}"\n'
@@ -138,6 +154,7 @@ def test_load_full_config(tmp_path, caplog):
     with caplog.at_level(logging.DEBUG):
         cfg = _load_from_toml(tmp_path, toml)
     assert cfg.default_model == "anthropic/claude-opus-4-6"
+    assert cfg.max_retries == 3
     assert cfg.api_keys["anthropic"].get_secret() == ant_secret
     assert cfg.api_keys["gemini"].get_secret() == gem_secret
     assert ant_secret not in caplog.text

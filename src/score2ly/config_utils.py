@@ -10,10 +10,11 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = Path.home() / ".config" / "score2ly" / "config.toml"
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class AppConfig:
     default_model: str = ""
     api_keys: dict[str, APIKey] = field(default_factory=dict)
+    max_retries: int | None = None
 
     def get_api_key_for_model(self, model: str) -> APIKey | None:
         lmodel = model.lower()
@@ -56,4 +57,12 @@ def load() -> AppConfig:
 
         api_keys[k.lower()] = api_key
 
-    return AppConfig(default_model=default_model, api_keys=api_keys)
+    max_retries = None
+    raw_max_retries = data.get("max_retries")
+    if raw_max_retries is not None:
+        if isinstance(raw_max_retries, int):
+            max_retries = raw_max_retries
+        else:
+            logger.warning("Invalid max_retries in config (expected integer, got %s)", type(raw_max_retries).__name__)
+
+    return AppConfig(default_model=default_model, api_keys=api_keys, max_retries=max_retries)

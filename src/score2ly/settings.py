@@ -50,9 +50,12 @@ class ConvertSettings:
         )
 
 
+DEFAULT_MAX_RETRIES = 2
+
+
 @dataclass(frozen=True, slots=True)
 class FixSettings:
     # LLM parameters (CLI overrides for interactive prompts)
     model: str = ""
     api_key: APIKey = APIKey("")
-    max_retries: int = 2
+    max_retries: int | None = None

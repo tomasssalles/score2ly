@@ -15,7 +15,7 @@ from score2ly import metadata, convert_pipeline, fix_pipeline
 from score2ly.exceptions import PipelineError
 from score2ly.image_processing import BlockMethod, SheetMethod
 from score2ly.pdf import PdfKind
-from score2ly.settings import ConvertSettings, FixSettings
+from score2ly.settings import ConvertSettings, DEFAULT_MAX_RETRIES, FixSettings
 from score2ly.utils import APIKey
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def main() -> None:
     xml_parser.add_argument("--xml", type=Path, default=None, metavar="FILE", help="Use this MusicXML file instead of running Audiveris OMR export")
 
     fix_settings_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    default_fix_settings = FixSettings()
+    default_fix_settings = FixSettings(max_retries=DEFAULT_MAX_RETRIES)
 
     llm_group = fix_settings_parser.add_argument_group("LLM parameters")
     llm_group.add_argument("--model", default=UNSET, metavar="MODEL", help="LLM model to use (e.g. gemini/gemini-2.5-flash); prompted if not provided")
