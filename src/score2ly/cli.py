@@ -141,10 +141,12 @@ def main() -> None:
     xml_parser.add_argument("--xml", type=Path, default=None, metavar="FILE", help="Use this MusicXML file instead of running Audiveris OMR export")
 
     fix_settings_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    default_fix_settings = FixSettings()
 
     llm_group = fix_settings_parser.add_argument_group("LLM parameters")
     llm_group.add_argument("--model", default=UNSET, metavar="MODEL", help="LLM model to use (e.g. gemini/gemini-2.5-flash); prompted if not provided")
     llm_group.add_argument("--api-key", default=UNSET, type=APIKey, metavar="KEY", help="API key for the LLM provider; prompted if not provided (pass '-' to use cached requests only)")
+    llm_group.add_argument("--max-retries", default=UNSET, type=int, metavar="N", help=_with_default("Maximum number of instructor retries on schema validation failure", "max_retries", default_fix_settings))
 
     # 'new' subcommand
     new = subparsers.add_parser("new", parents=[common_parser, conv_settings_parser, xml_parser], help="Create a new .s2l bundle from a score file.")
