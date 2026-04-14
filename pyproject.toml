@@ -5,15 +5,15 @@ description = "Convert musical scores to LilyPond format"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pypdf>=5.0",
-    "pdf2image>=1.17",
-    "Pillow>=10.0",
-    "img2pdf>=0.5",
-    "opencv-python>=4.10",
-    "numpy>=2.0",
-    "litellm>=1.83.7",
-    "instructor>=1.15.1",
-    "pydantic>=2.12.5",
+    "pypdf>=6.10,<7",
+    "pdf2image>=1.17,<2",
+    "Pillow>=12.2,<13",
+    "img2pdf>=0.5,<1",
+    "opencv-python>=4.10,<5",
+    "numpy>=2.4,<3",
+    "litellm>=1.83,<2",
+    "instructor>=1.15,<2",
+    "pydantic>=2.12,<3",
 ]
 
 [project.scripts]
@@ -28,5 +28,5 @@ packages = ["src/score2ly"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0,<10",
 ]
