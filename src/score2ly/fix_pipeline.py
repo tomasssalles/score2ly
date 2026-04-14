@@ -4,7 +4,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from pathlib import Path
 
-from score2ly import convert_pipeline, metadata
+from score2ly import config_utils, convert_pipeline, metadata
 from score2ly.exceptions import PipelineError
 from score2ly.pipeline_common import run_stage, StageParams, should_run, get_dependencies_to_outputs
 from score2ly.settings import FixSettings, ConvertSettings
@@ -36,7 +36,9 @@ def _verify_convert_pipeline(stage_params: Sequence[StageParams[ConvertSettings]
 
 
 def _collect_llm_params(settings: FixSettings) -> FixSettings:
-    model = settings.model
+    cfg = config_utils.load()
+
+    model = settings.model or cfg.default_model
     if not model:
         while True:
             model = input("Model (e.g. gemini/gemini-2.5-flash): ").strip()
@@ -46,7 +48,7 @@ def _collect_llm_params(settings: FixSettings) -> FixSettings:
             else:
                 break
 
-    api_key = settings.api_key or APIKey(input("API key (or '-' to use cached requests only): ").strip())
+    api_key = settings.api_key or cfg.get_api_key_for_model(model) or APIKey(input("API key (or '-' to use cached requests only): ").strip())
     return replace(settings, model=model, api_key=api_key)
 
 
