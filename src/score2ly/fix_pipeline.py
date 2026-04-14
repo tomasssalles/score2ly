@@ -46,7 +46,7 @@ def _collect_llm_params(settings: FixSettings) -> FixSettings:
             else:
                 break
 
-    api_key = settings.api_key or APIKey(input("API key: ").strip())
+    api_key = settings.api_key or APIKey(input("API key (or '-' to use cached requests only): ").strip())
     return replace(settings, model=model, api_key=api_key)
 
 
