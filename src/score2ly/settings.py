@@ -55,3 +55,4 @@ class FixSettings:
     # LLM parameters (CLI overrides for interactive prompts)
     model: str = ""
     api_key: APIKey = APIKey("")
+    max_retries: int = 2

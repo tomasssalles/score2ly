@@ -11,6 +11,9 @@ dependencies = [
     "img2pdf>=0.5",
     "opencv-python>=4.10",
     "numpy>=2.0",
+    "litellm>=1.83.7",
+    "instructor>=1.15.1",
+    "pydantic>=2.12.5",
 ]
 
 [project.scripts]

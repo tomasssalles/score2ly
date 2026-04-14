@@ -36,7 +36,16 @@ def _verify_convert_pipeline(stage_params: Sequence[StageParams[ConvertSettings]
 
 
 def _collect_llm_params(settings: FixSettings) -> FixSettings:
-    model = settings.model or input("Model (e.g. claude-opus-4-6): ").strip()
+    model = settings.model
+    if not model:
+        while True:
+            model = input("Model (e.g. gemini/gemini-2.5-flash): ").strip()
+
+            if any(s in model.lower() for s in ("grok", "xai", "x-ai")):
+                logger.warning("Sorry, xAI models are not supported.")
+            else:
+                break
+
     api_key = settings.api_key or APIKey(input("API key: ").strip())
     return replace(settings, model=model, api_key=api_key)
 
