@@ -3,6 +3,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from score2ly.settings import DEFAULT_MAX_RETRIES
 from score2ly.utils import APIKey
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,53 @@ class AppConfig:
                 pass
 
         return None
+
+
+def _toml_escape(s: str) -> str:
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _to_toml_string(config: AppConfig) -> str:
+    lines = ["# score2ly configuration"]
+
+    lines.append("")
+    lines.append("# Default LLM model (e.g. gemini/gemini-2.5-flash)")
+    if config.default_model:
+        default_model_line = f"default_model = \"{_toml_escape(config.default_model)}\""
+    else:
+        default_model_line = "# default_model = \"\""
+    lines.append(default_model_line)
+
+    lines.append("")
+    lines.append(f"# Maximum number of instructor retries on schema validation failure (default: {DEFAULT_MAX_RETRIES})")
+    if config.max_retries is not None:
+        max_retries_line = f"max_retries = {config.max_retries}"
+    else:
+        max_retries_line = f"# max_retries = {DEFAULT_MAX_RETRIES}"
+    lines.append(max_retries_line)
+
+    lines.append("")
+    lines.append("# API keys per provider or model")
+    if config.api_keys:
+        api_keys_header_line = "[api_keys]"
+        api_keys_entries_lines = [f"{k} = \"{_toml_escape(v.get_secret())}\"" for k, v in config.api_keys.items()]
+    else:
+        api_keys_header_line = "# [api_keys]"
+        api_keys_entries_lines = [
+            "# gemini = \"\"",
+            "# openrouter = \"\"",
+            "# gemini/gemini-3.1-flash-live-preview = \"\"",
+        ]
+    lines.append(api_keys_header_line)
+    lines.extend(api_keys_entries_lines)
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def save(config: AppConfig) -> None:
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(_to_toml_string(config))
 
 
 def load() -> AppConfig:

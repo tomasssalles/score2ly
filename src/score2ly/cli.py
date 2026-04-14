@@ -1,17 +1,19 @@
 import argparse
 import logging
+import os
 import shutil
+import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import fields
+from dataclasses import fields, replace
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from importlib.metadata import version
 from typing import Any
 
-from score2ly import metadata, convert_pipeline, fix_pipeline
+from score2ly import config_utils, metadata, convert_pipeline, fix_pipeline
 from score2ly.exceptions import PipelineError
 from score2ly.image_processing import BlockMethod, SheetMethod
 from score2ly.pdf import PdfKind
@@ -96,6 +98,20 @@ def _with_default(help_str: str, arg_name: str, defaults: Any) -> str:
     return f"{help_str} (default: {default_value!r})"
 
 
+def _config(args: argparse.Namespace) -> None:
+    if args.config_command is None:
+        args.config_subparser.print_help()
+        sys.exit(1)
+    args.config_func(args)
+
+
+def _config_path(args: argparse.Namespace) -> None:
+    if not config_utils.CONFIG_PATH.exists():
+        config_utils.save(config_utils.AppConfig())
+
+    print(config_utils.CONFIG_PATH)
+
+
 def main() -> None:
     common_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     common_parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
@@ -170,6 +186,14 @@ def main() -> None:
     fix.set_defaults(func=_fix)
 
     fix.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
+
+    # 'config' subcommand
+    config_parser = subparsers.add_parser("config", parents=[common_parser], help="Manage score2ly configuration.")
+    config_subparsers = config_parser.add_subparsers(dest="config_command")
+    config_parser.set_defaults(func=_config, config_subparser=config_parser, config_func=None)
+
+    config_path_parser = config_subparsers.add_parser("path", help=f"Print the path to the config file.")
+    config_path_parser.set_defaults(config_func=_config_path)
 
     args = parser.parse_args()
 
