@@ -203,6 +203,41 @@ Pages are 1-indexed. Only the selected pages are stored in the bundle; the rest 
 
 ---
 
+## LLM parameters (for `fix`)
+
+The `score2ly fix` command requires an LLM model and an API key. These are resolved in the following order of precedence:
+
+1. **CLI arguments** — `--model` and `--api-key`
+2. **Config file** — `~/.config/score2ly/config.toml`
+3. **Interactive prompt** — score2ly will ask for any missing values at runtime
+
+### Config file
+
+The config file path is `~/.config/score2ly/config.toml`. Example:
+
+```toml
+default_model = "gemini/gemini-2.5-flash"
+max_retries = 2
+
+[api_keys]
+gemini = "AIzaSy..."
+anthropic = "sk-ant-..."
+# A key for a specific model takes precedence over the provider-level key:
+# gemini/gemini-2.5-pro = "..."
+```
+
+Model identifiers follow the `provider/model-name` convention used by [litellm](https://docs.litellm.ai/docs/providers) (e.g. `gemini/gemini-2.5-flash`, `anthropic/claude-opus-4-6`, `openrouter/google/gemini-2.5-pro`). When looking up an API key, score2ly first tries to match the full model string, then falls back to the provider prefix.
+
+To open the config file in a text editor:
+
+```bash
+nano $(score2ly config path)
+```
+
+Or use the `score2ly config` subcommands to manage it from the command line (see [CLI reference](#cli-reference)).
+
+---
+
 ## CLI reference
 
 ### Global options
@@ -276,9 +311,44 @@ Run the LLM-assisted fixing pipeline on a completed `.s2l` bundle. Requires all 
 
 ```
 BUNDLE                        Path to the .s2l bundle directory
+
+--model MODEL                 LLM model to use (e.g. gemini/gemini-2.5-flash); falls back to
+                              config file default_model, then interactive prompt
+--api-key KEY                 API key for the LLM provider; falls back to config file api_keys,
+                              then interactive prompt (pass '-' to use cached requests only)
+--max-retries N               Max instructor retries on schema validation failure (default: 2)
 ```
 
-> **Note:** This command is under active development. The fixing stages are not yet implemented; the command currently validates that the conversion pipeline is complete and will exit successfully.
+> **Note:** This command is under active development. The fixing stages are currently placeholder implementations; the command validates that the conversion pipeline is complete, collects LLM parameters, and will run the full fixing pipeline once it is implemented.
+
+### `score2ly config`
+
+Manage the score2ly configuration file (`~/.config/score2ly/config.toml`).
+
+**`score2ly config list`** — Show current configuration values.
+
+**`score2ly config set`** — Set one or more values:
+
+```
+--default-model MODEL         Default LLM model
+--max-retries N               Max instructor retries on schema validation failure
+--api-key PROVIDER_OR_MODEL KEY
+                              Set API key for a provider or specific model
+```
+
+**`score2ly config unset`** — Remove one or more values (reverts them to unset/default):
+
+```
+--default-model               Unset the default model
+--max-retries                 Unset max retries
+--api-key PROVIDER_OR_MODEL   Remove API key for a provider or specific model
+```
+
+**`score2ly config path`** — Print the path to the config file (creates it with commented-out defaults if it does not yet exist). Useful for opening it in an editor:
+
+```bash
+nano $(score2ly config path)
+```
 
 ---
 
@@ -308,4 +378,4 @@ A graphical interface (`Score2LilyPond`) is planned but not yet implemented.
 
 ### Fixing OMR mistakes with LLMs (Phase 2 of the project)
 
-This is the main goal of the project and what could one day make it one of the best, affordable ways to transcribe score PDFs into LilyPond format. The `score2ly fix` command is the entry point for this pipeline and is already available, but its stages are still being implemented. As you may have noticed, the conversion pipeline already produces some artifacts not used in the final `transcription.ly` and `transcription.pdf` outputs — cropped PNGs of each individual system and short LilyPond snippets of each individual system. These artifacts are meant to be given to a frontier LLM to revise and improve, and the fixing pipeline will combine the results into a final LilyPond source for the full score.
+This is the main goal of the project and what could one day make it one of the best, affordable ways to transcribe score PDFs into LilyPond format. The `score2ly fix` command is the entry point for this pipeline. The CLI plumbing is in place — it accepts `--model`, `--api-key`, and `--max-retries`, reads defaults from the config file, and prompts for any missing values — but the actual fixing stages are still being implemented. As you may have noticed, the conversion pipeline already produces some artifacts not used in the final `transcription.ly` and `transcription.pdf` outputs — cropped PNGs of each individual system and short LilyPond snippets of each individual system. These artifacts are meant to be given to a frontier LLM to revise and improve, and the fixing pipeline will combine the results into a final LilyPond source for the full score.
