@@ -3,6 +3,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from score2ly.exceptions import PipelineError
 from score2ly.settings import DEFAULT_MAX_RETRIES
 from score2ly.utils import APIKey
 
@@ -82,13 +83,15 @@ def save(config: AppConfig) -> None:
     CONFIG_PATH.write_text(_to_toml_string(config))
 
 
-def load() -> AppConfig:
+def load(strict: bool = False) -> AppConfig:
     if not CONFIG_PATH.exists():
         return AppConfig()
     try:
         with open(CONFIG_PATH, "rb") as f:
             data = tomllib.load(f)
     except Exception as e:
+        if strict:
+            raise PipelineError(f"Error parsing config file {CONFIG_PATH}: {e}") from e
         logger.warning("Failed to read config file %s: %s", CONFIG_PATH, e)
         return AppConfig()
 
@@ -100,6 +103,8 @@ def load() -> AppConfig:
         try:
             api_key = APIKey(v)
         except TypeError as e:
+            if strict:
+                raise PipelineError(f"Error parsing config file {CONFIG_PATH}: Invalid API key for {k!r}: {e}") from e
             logger.warning("Invalid API key for %s: %s", k, e)
             continue
 
@@ -111,6 +116,8 @@ def load() -> AppConfig:
         if isinstance(raw_max_retries, int):
             max_retries = raw_max_retries
         else:
+            if strict:
+                raise PipelineError(f"Error parsing config file {CONFIG_PATH}: max_retries must be an integer, got {type(raw_max_retries).__name__!r}")
             logger.warning("Invalid max_retries in config (expected integer, got %s)", type(raw_max_retries).__name__)
 
     return AppConfig(default_model=default_model, api_keys=api_keys, max_retries=max_retries)

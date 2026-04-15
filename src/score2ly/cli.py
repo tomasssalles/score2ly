@@ -132,7 +132,8 @@ def _config_set(args: argparse.Namespace) -> None:
         args.print_help()
         sys.exit(1)
 
-    cfg = config_utils.load()
+    with _error_handling(args.verbose):
+        cfg = config_utils.load(strict=True)
 
     if args.default_model is not None:
         cfg = replace(cfg, default_model=args.default_model)
@@ -143,6 +144,31 @@ def _config_set(args: argparse.Namespace) -> None:
     if args.api_key is not None:
         provider, key = args.api_key
         cfg = replace(cfg, api_keys={**cfg.api_keys, provider.lower(): APIKey(key)})
+
+    config_utils.save(cfg)
+    logger.info("Config saved to %s", config_utils.CONFIG_PATH)
+
+
+def _config_unset(args: argparse.Namespace) -> None:
+    if not args.default_model and not args.max_retries and args.api_key is None:
+        args.print_help()
+        sys.exit(1)
+
+    with _error_handling(args.verbose):
+        cfg = config_utils.load(strict=True)
+
+    if args.default_model:
+        cfg = replace(cfg, default_model="")
+
+    if args.max_retries:
+        cfg = replace(cfg, max_retries=None)
+
+    if args.api_key is not None:
+        provider = args.api_key.lower()
+        new_api_keys = {k: v for k, v in cfg.api_keys.items() if k != provider}
+        if len(new_api_keys) == len(cfg.api_keys):
+            logger.warning("No API key found for %r", args.api_key)
+        cfg = replace(cfg, api_keys=new_api_keys)
 
     config_utils.save(cfg)
     logger.info("Config saved to %s", config_utils.CONFIG_PATH)
@@ -237,6 +263,11 @@ def main() -> None:
     config_set_parser.add_argument("--default-model", metavar="MODEL", default=None, help="Default LLM model (e.g. gemini/gemini-2.5-flash).")
     config_set_parser.add_argument("--max-retries", type=int, metavar="N", default=None, help=f"Max instructor retries on schema validation failure (default: {DEFAULT_MAX_RETRIES}).")
     config_set_parser.add_argument("--api-key", nargs=2, metavar=("PROVIDER_OR_MODEL", "KEY"), default=None, help="Set API key for a provider or model (e.g. --api-key gemini AIzaSy...).")
+
+    config_unset_parser = _add_parser(config_subparsers, "unset", "Unset one or more configuration values.", func=_config_unset, parents=[common_parser])
+    config_unset_parser.add_argument("--default-model", action="store_true", default=False, help="Unset the default model.")
+    config_unset_parser.add_argument("--max-retries", action="store_true", default=False, help="Unset max retries (reverts to built-in default).")
+    config_unset_parser.add_argument("--api-key", metavar="PROVIDER_OR_MODEL", default=None, help="Remove API key for a provider or model.")
 
     _add_parser(config_subparsers, "path", "Print the path to the config file.", func=_config_path, parents=[common_parser])
 
