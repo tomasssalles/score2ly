@@ -1,10 +1,8 @@
 import argparse
 import logging
-import os
 import shutil
-import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Callable
 from contextlib import contextmanager
 from dataclasses import fields, replace
 from datetime import datetime, timezone
@@ -98,11 +96,17 @@ def _with_default(help_str: str, arg_name: str, defaults: Any) -> str:
     return f"{help_str} (default: {default_value!r})"
 
 
+def _add_parser(
+    subparsers, name: str, help_text: str, func: Callable[[argparse.Namespace], None], **kwargs
+) -> argparse.ArgumentParser:
+    p = subparsers.add_parser(name, help=help_text, description=help_text, **kwargs)
+    p.set_defaults(print_help=p.print_help, func=func)
+    return p
+
+
 def _config(args: argparse.Namespace) -> None:
-    if args.config_command is None:
-        args.config_subparser.print_help()
-        sys.exit(1)
-    args.config_func(args)
+    args.print_help()
+    sys.exit(1)
 
 
 def _config_list(args: argparse.Namespace) -> None:
@@ -121,6 +125,27 @@ def _config_list(args: argparse.Namespace) -> None:
             print(f"    {provider:<16}{key}")
     else:
         print("  api_keys       (none)")
+
+
+def _config_set(args: argparse.Namespace) -> None:
+    if args.default_model is None and args.max_retries is None and args.api_key is None:
+        args.print_help()
+        sys.exit(1)
+
+    cfg = config_utils.load()
+
+    if args.default_model is not None:
+        cfg = replace(cfg, default_model=args.default_model)
+
+    if args.max_retries is not None:
+        cfg = replace(cfg, max_retries=args.max_retries)
+
+    if args.api_key is not None:
+        provider, key = args.api_key
+        cfg = replace(cfg, api_keys={**cfg.api_keys, provider.lower(): APIKey(key)})
+
+    config_utils.save(cfg)
+    logger.info("Config saved to %s", config_utils.CONFIG_PATH)
 
 
 def _config_path(args: argparse.Namespace) -> None:
@@ -183,8 +208,7 @@ def main() -> None:
     llm_group.add_argument("--max-retries", default=UNSET, type=int, metavar="N", help=_with_default("Maximum number of instructor retries on schema validation failure", "max_retries", default_fix_settings))
 
     # 'new' subcommand
-    new = subparsers.add_parser("new", parents=[common_parser, conv_settings_parser, xml_parser], help="Create a new .s2l bundle from a score file.")
-    new.set_defaults(func=_new)
+    new = _add_parser(subparsers, "new", "Create a new .s2l bundle from a score file.", func=_new, parents=[common_parser, conv_settings_parser, xml_parser])
 
     new.add_argument("input_pdf", type=Path, help="Input score file")
     output_group = new.add_mutually_exclusive_group()
@@ -194,24 +218,27 @@ def main() -> None:
     new.add_argument("--page-range", type=_parse_page_range, default=None, metavar="START-END", help="Only convert pages START through END (1-indexed, inclusive)")
 
     # 'update' subcommand
-    update = subparsers.add_parser("update", parents=[common_parser, conv_settings_parser, xml_parser], help="Partially re-run the pipeline on a .s2l bundle after manual edits.")
-    update.set_defaults(func=_update)
+    update = _add_parser(subparsers, "update", "Partially re-run the pipeline on a .s2l bundle after manual edits.", func=_update, parents=[common_parser, conv_settings_parser, xml_parser])
 
     update.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     # 'fix' subcommand
-    fix = subparsers.add_parser("fix", parents=[common_parser, fix_settings_parser], help="Fix OMR mistakes with an LLM.")
-    fix.set_defaults(func=_fix)
+    fix = _add_parser(subparsers, "fix", "Fix OMR mistakes with an LLM.", func=_fix, parents=[common_parser, fix_settings_parser])
 
     fix.add_argument("bundle", type=Path, help="Path to the .s2l bundle directory")
 
     # 'config' subcommand
-    config_parser = subparsers.add_parser("config", parents=[common_parser], help="Manage score2ly configuration.")
+    config_parser = _add_parser(subparsers, "config", "Manage score2ly configuration.", func=_config, parents=[common_parser])
     config_subparsers = config_parser.add_subparsers(dest="config_command", title="subcommands")
-    config_parser.set_defaults(func=_config, config_subparser=config_parser, config_func=None)
 
-    config_subparsers.add_parser("list", help="Show current configuration values.").set_defaults(config_func=_config_list)
-    config_subparsers.add_parser("path", help="Print the path to the config file.").set_defaults(config_func=_config_path)
+    _add_parser(config_subparsers, "list", "Show current configuration values.", func=_config_list, parents=[common_parser])
+
+    config_set_parser = _add_parser(config_subparsers, "set", "Set one or more configuration values.", func=_config_set, parents=[common_parser])
+    config_set_parser.add_argument("--default-model", metavar="MODEL", default=None, help="Default LLM model (e.g. gemini/gemini-2.5-flash).")
+    config_set_parser.add_argument("--max-retries", type=int, metavar="N", default=None, help=f"Max instructor retries on schema validation failure (default: {DEFAULT_MAX_RETRIES}).")
+    config_set_parser.add_argument("--api-key", nargs=2, metavar=("PROVIDER_OR_MODEL", "KEY"), default=None, help="Set API key for a provider or model (e.g. --api-key gemini AIzaSy...).")
+
+    _add_parser(config_subparsers, "path", "Print the path to the config file.", func=_config_path, parents=[common_parser])
 
     args = parser.parse_args()
 
